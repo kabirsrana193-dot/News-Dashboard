@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/12aaniH3K96aqg9doNY0wjnN-GeqmyFdz
 """
 
-!pip install streamlit gnews transformers torch
+pip install streamlit gnews transformers torch
 
 import streamlit as st
 from gnews import GNews
