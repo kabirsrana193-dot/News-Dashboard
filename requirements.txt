@@ -1,7 +1,6 @@
 streamlit==1.26.0
-gnews==0.1.7
+newsapi-python==0.2.7
 transformers==4.35.0
 torch==2.1.0
 pandas==2.1.0
-dash==2.13.1
-dash-bootstrap-components==1.4.2
+
