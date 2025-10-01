@@ -79,26 +79,28 @@ def check_nifty_200_mention(text):
     return False
 
 def fetch_news(num_articles=10):
-    """Fetch news articles mentioning Nifty 200 stocks"""
+    """Fetch news articles mentioning Nifty 200 stocks directly"""
     all_articles = []
     seen_titles = {article['Title'] for article in st.session_state.news_articles}
     
-    search_terms = [
-        "NSE India", "BSE India", "Sensex", "Nifty", "stock market India",
-        "Indian stocks", "Mumbai stock exchange", "earnings India",
-        "quarterly results India", "Indian companies"
+    # Search directly for Nifty 200 stocks to reduce noise
+    priority_stocks = [
+        "Reliance Industries", "TCS", "Infosys", "HDFC Bank", "ICICI Bank",
+        "Adani", "Tata Motors", "Wipro", "Bharti Airtel", "SBI",
+        "Bajaj Finance", "Asian Paints", "Maruti Suzuki", "ITC"
     ]
     
-    for term in search_terms:
+    for stock in priority_stocks:
         try:
-            url = f"https://news.google.com/rss/search?q={term}+when:1d&hl=en-IN&gl=IN&ceid=IN:en"
+            # Search for each major stock directly
+            url = f"https://news.google.com/rss/search?q={stock}+stock+india&hl=en-IN&gl=IN&ceid=IN:en"
             feed = feedparser.parse(url)
             
-            for entry in feed.entries:
+            for entry in feed.entries[:3]:  # Top 3 articles per stock
                 title = entry.title
                 
-                # Skip if already seen or doesn't mention Nifty 200 stocks
-                if title in seen_titles or not check_nifty_200_mention(title):
+                # Skip if already seen
+                if title in seen_titles:
                     continue
                 
                 all_articles.append(entry)
@@ -168,7 +170,7 @@ def process_news(articles):
         url = art.link
         
         sentiment_result = finbert(title[:512])[0]
-        sentiment = sentiment_result["label"]
+        sentiment = sentiment_result["label"].lower()  # Convert to lowercase
         score = sentiment_result["score"]
         
         records.append({
@@ -192,7 +194,7 @@ def process_tweets(tweets):
         link = tweet_data['link']
         
         sentiment_result = finbert(content[:512])[0]
-        sentiment = sentiment_result["label"]
+        sentiment = sentiment_result["label"].lower()  # Convert to lowercase
         score = sentiment_result["score"]
         
         records.append({
@@ -262,9 +264,9 @@ if all_content:
     total_items = len(df_all)
     news_count = len(st.session_state.news_articles)
     tweet_count = len(st.session_state.tweets)
-    positive_count = len(df_all[df_all['Sentiment'] == 'positive'])
-    neutral_count = len(df_all[df_all['Sentiment'] == 'neutral'])
-    negative_count = len(df_all[df_all['Sentiment'] == 'negative'])
+    positive_count = len(df_all[df_all['Sentiment'].str.lower() == 'positive'])
+    neutral_count = len(df_all[df_all['Sentiment'].str.lower() == 'neutral'])
+    negative_count = len(df_all[df_all['Sentiment'].str.lower() == 'negative'])
     
     with col1:
         st.metric("Total Items", total_items)
@@ -309,7 +311,7 @@ if all_content:
     
     # News Column
     with col_news:
-        st.subheader("📰 News Articles (Nifty 200)")
+        st.subheader(" News Articles (Nifty 200)")
         
         if st.session_state.news_articles:
             for article in st.session_state.news_articles:
@@ -339,7 +341,7 @@ if all_content:
     
     # Tweets Column
     with col_tweets:
-        st.subheader("🐦 Latest Tweets")
+        st.subheader("Latest Tweets")
         
         if st.session_state.tweets:
             for tweet in st.session_state.tweets:
