@@ -39,13 +39,14 @@ NIFTY_200_STOCKS = [
     "InterGlobe Aviation", "IndiGo", "SpiceJet", "Zydus Lifesciences", "Mankind Pharma"
 ]
 
-TWITTER_ACCOUNTS = {
-    "cnbctv18news": "CNBC-TV18",
-    "CNBC": "CNBC",
-    "business": "Business News",
-    "FirstQuake": "First Quake",
-    "markets": "Markets"
-}
+# Twitter accounts to fetch from
+TWITTER_RSS_FEEDS = [
+    ("https://rsshub.app/twitter/user/CNBCTV18News", "CNBC-TV18"),
+    ("https://rsshub.app/twitter/user/business", "Bloomberg Business"),
+    ("https://rsshub.app/twitter/user/markets", "Markets"),
+    ("https://rsshub.app/twitter/user/RedboxGlobal", "Redbox Global"),
+    ("https://rsshub.app/twitter/user/first_quake", "First Quake"),
+]
 
 ARTICLES_PER_REFRESH = 10
 
@@ -105,7 +106,7 @@ def fetch_news(num_articles=10):
                 
                 if len(all_articles) >= num_articles:
                     break
-        except Exception:
+        except Exception as e:
             continue
         
         if len(all_articles) >= num_articles:
@@ -114,50 +115,48 @@ def fetch_news(num_articles=10):
     return all_articles[:num_articles]
 
 def fetch_tweets(num_tweets=10):
-    """Fetch tweets from specified accounts"""
+    """Fetch tweets from financial accounts using RSSHub"""
     all_tweets = []
-    seen_titles = {tweet['Title'] for tweet in st.session_state.tweets}
+    seen_content = {tweet['Title'] for tweet in st.session_state.tweets}
     
-    # Using Nitter instances for RSS (free Twitter access)
-    nitter_instances = [
-        "https://nitter.poast.org",
-        "https://nitter.privacydev.net",
-        "https://nitter.net"
-    ]
-    
-    for account, display_name in TWITTER_ACCOUNTS.items():
-        for nitter in nitter_instances:
-            try:
-                url = f"{nitter}/{account}/rss"
-                feed = feedparser.parse(url)
-                
-                if not feed.entries:
+    for feed_url, account_name in TWITTER_RSS_FEEDS:
+        try:
+            feed = feedparser.parse(feed_url)
+            
+            if not feed.entries:
+                continue
+            
+            for entry in feed.entries:
+                # Get tweet content
+                if hasattr(entry, 'title'):
+                    content = entry.title
+                elif hasattr(entry, 'summary'):
+                    content = entry.summary[:200]
+                else:
                     continue
                 
-                for entry in feed.entries[:num_tweets]:
-                    title = entry.title if hasattr(entry, 'title') else entry.summary[:100]
-                    
-                    if title in seen_titles:
-                        continue
-                    
-                    all_tweets.append({
-                        'entry': entry,
-                        'account': display_name
-                    })
-                    seen_titles.add(title)
-                    
-                    if len(all_tweets) >= num_tweets:
-                        break
+                # Skip if already seen
+                if content in seen_content:
+                    continue
                 
-                break  # Success, move to next account
+                all_tweets.append({
+                    'content': content,
+                    'link': entry.link if hasattr(entry, 'link') else '#',
+                    'account': account_name
+                })
+                seen_content.add(content)
                 
-            except Exception:
-                continue
+                if len(all_tweets) >= num_tweets:
+                    break
+                    
+        except Exception as e:
+            st.sidebar.error(f"Error fetching from {account_name}: {str(e)}")
+            continue
         
         if len(all_tweets) >= num_tweets:
             break
     
-    return all_tweets[:num_tweets]
+    return all_tweets
 
 def process_news(articles):
     """Process news articles with sentiment analysis"""
@@ -168,12 +167,15 @@ def process_news(articles):
         source = getattr(art, "source", {}).get("title", "Unknown") if hasattr(art, "source") else "Unknown"
         url = art.link
         
-        sentiment = finbert(title[:512])[0]["label"]
+        sentiment_result = finbert(title[:512])[0]
+        sentiment = sentiment_result["label"]
+        score = sentiment_result["score"]
         
         records.append({
             "Title": title,
             "Source": source,
             "Sentiment": sentiment,
+            "Score": round(score, 2),
             "Link": url,
             "Type": "News"
         })
@@ -185,19 +187,20 @@ def process_tweets(tweets):
     records = []
     
     for tweet_data in tweets:
-        entry = tweet_data['entry']
+        content = tweet_data['content']
         account = tweet_data['account']
+        link = tweet_data['link']
         
-        title = entry.title if hasattr(entry, 'title') else entry.summary[:100]
-        url = entry.link
-        
-        sentiment = finbert(title[:512])[0]["label"]
+        sentiment_result = finbert(content[:512])[0]
+        sentiment = sentiment_result["label"]
+        score = sentiment_result["score"]
         
         records.append({
-            "Title": title,
+            "Title": content,
             "Source": account,
             "Sentiment": sentiment,
-            "Link": url,
+            "Score": round(score, 2),
+            "Link": link,
             "Type": "Tweet"
         })
     
@@ -211,26 +214,29 @@ st.markdown("*Real-time news and tweets about Nifty 200 stocks with sentiment an
 st.markdown("---")
 
 # Refresh button
-col1, col2 = st.columns([1, 5])
+col1, col2, col3 = st.columns([1, 2, 3])
 with col1:
-    if st.button("🔄 Refresh", type="primary"):
+    if st.button("🔄 Refresh", type="primary", use_container_width=True):
         with st.spinner("Fetching latest updates..."):
+            news_count = 0
+            tweet_count = 0
+            
             # Fetch news
             new_articles = fetch_news(ARTICLES_PER_REFRESH)
             if new_articles:
                 processed_news = process_news(new_articles)
                 st.session_state.news_articles = processed_news + st.session_state.news_articles
+                news_count = len(processed_news)
             
             # Fetch tweets
             new_tweets = fetch_tweets(ARTICLES_PER_REFRESH)
             if new_tweets:
                 processed_tweets = process_tweets(new_tweets)
                 st.session_state.tweets = processed_tweets + st.session_state.tweets
+                tweet_count = len(processed_tweets)
             
-            if new_articles or new_tweets:
-                st.success(f"Added {len(new_articles) if new_articles else 0} news + {len(new_tweets) if new_tweets else 0} tweets!")
-            else:
-                st.info("No new updates found.")
+            st.success(f"✅ Added {news_count} news + {tweet_count} tweets!")
+            st.rerun()
 
 # Load initial content if empty
 if not st.session_state.news_articles and not st.session_state.tweets:
@@ -253,21 +259,25 @@ if all_content:
     st.subheader("📊 Overall Metrics")
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
+    total_items = len(df_all)
+    news_count = len(st.session_state.news_articles)
+    tweet_count = len(st.session_state.tweets)
+    positive_count = len(df_all[df_all['Sentiment'] == 'positive'])
+    neutral_count = len(df_all[df_all['Sentiment'] == 'neutral'])
+    negative_count = len(df_all[df_all['Sentiment'] == 'negative'])
+    
     with col1:
-        st.metric("Total Items", len(df_all))
+        st.metric("Total Items", total_items)
     with col2:
-        st.metric("News Articles", len(st.session_state.news_articles))
+        st.metric("News Articles", news_count)
     with col3:
-        st.metric("Tweets", len(st.session_state.tweets))
+        st.metric("Tweets", tweet_count)
     with col4:
-        positive_count = len(df_all[df_all['Sentiment'] == 'positive'])
-        st.metric("Positive", positive_count)
+        st.metric("🟢 Positive", positive_count)
     with col5:
-        neutral_count = len(df_all[df_all['Sentiment'] == 'neutral'])
-        st.metric("Neutral", neutral_count)
+        st.metric("⚪ Neutral", neutral_count)
     with col6:
-        negative_count = len(df_all[df_all['Sentiment'] == 'negative'])
-        st.metric("Negative", negative_count)
+        st.metric("🔴 Negative", negative_count)
     
     st.markdown("---")
     
@@ -286,8 +296,10 @@ if all_content:
             "neutral": "gray",
             "negative": "red"
         },
-        title="Sentiment Analysis of All Content"
+        title="Sentiment Analysis of All Content",
+        text="Count"
     )
+    fig.update_traces(textposition='outside')
     st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
@@ -302,14 +314,25 @@ if all_content:
         if st.session_state.news_articles:
             for article in st.session_state.news_articles:
                 with st.container():
+                    sentiment_color = {
+                        "positive": "#28a745",
+                        "neutral": "#6c757d",
+                        "negative": "#dc3545"
+                    }
+                    
                     sentiment_emoji = {
                         "positive": "🟢",
                         "neutral": "⚪",
                         "negative": "🔴"
                     }
                     
-                    st.markdown(f"{sentiment_emoji.get(article['Sentiment'], '⚪')} **[{article['Title']}]({article['Link']})**")
-                    st.caption(f"Source: {article['Source']} | {article['Sentiment'].title()}")
+                    st.markdown(f"**[{article['Title']}]({article['Link']})**")
+                    
+                    # Sentiment badge with confidence
+                    sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
+                    st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
+                    
+                    st.caption(f"Source: {article['Source']}")
                     st.markdown("---")
         else:
             st.info("No news articles yet. Click Refresh!")
@@ -321,21 +344,32 @@ if all_content:
         if st.session_state.tweets:
             for tweet in st.session_state.tweets:
                 with st.container():
+                    sentiment_color = {
+                        "positive": "#28a745",
+                        "neutral": "#6c757d",
+                        "negative": "#dc3545"
+                    }
+                    
                     sentiment_emoji = {
                         "positive": "🟢",
                         "neutral": "⚪",
                         "negative": "🔴"
                     }
                     
-                    st.markdown(f"{sentiment_emoji.get(tweet['Sentiment'], '⚪')} **[{tweet['Title']}]({tweet['Link']})**")
-                    st.caption(f"@{tweet['Source']} | {tweet['Sentiment'].title()}")
+                    st.markdown(f"**[{tweet['Title'][:150]}...]({tweet['Link']})**")
+                    
+                    # Sentiment badge with confidence
+                    sentiment_text = f"{sentiment_emoji[tweet['Sentiment']]} {tweet['Sentiment'].upper()} (confidence: {tweet['Score']})"
+                    st.markdown(f"<span style='background-color: {sentiment_color[tweet['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
+                    
+                    st.caption(f"@{tweet['Source']}")
                     st.markdown("---")
         else:
-            st.info("No tweets yet. Click Refresh!")
+            st.info("No tweets yet. Click Refresh! (Note: Twitter feeds may take time to load)")
 
 else:
-    st.info("Click 'Refresh' to load content.")
+    st.info("👆 Click 'Refresh' to load content.")
 
 # Footer
 st.markdown("---")
-st.caption("💡 Dashboard updates with latest Nifty 200 stock news and financial tweets")
+st.caption("💡 Dashboard updates with latest Nifty 200 stock news and financial tweets | Sentiment confidence scores show model certainty")
