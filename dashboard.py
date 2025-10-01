@@ -85,9 +85,27 @@ def fetch_news(num_articles=10):
     
     # Search directly for Nifty 200 stocks to reduce noise
     priority_stocks = [
-        "Reliance Industries", "TCS", "Infosys", "HDFC Bank", "ICICI Bank",
-        "Adani", "Tata Motors", "Wipro", "Bharti Airtel", "SBI",
-        "Bajaj Finance", "Asian Paints", "Maruti Suzuki", "ITC"
+        "Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel", "ITC",
+    "State Bank", "SBI", "Hindustan Unilever", "HUL", "Bajaj Finance", "Kotak Mahindra",
+    "LIC", "Axis Bank", "Larsen & Toubro", "L&T", "Asian Paints", "Maruti Suzuki",
+    "Titan", "Sun Pharma", "HCL Tech", "Ultratechn Cement", "Nestle", "Adani",
+    "Tata Motors", "Wipro", "Power Grid", "NTPC", "Bajaj Finserv", "Tata Steel",
+    "Grasim", "Hindalco", "IndusInd Bank", "Mahindra", "M&M", "Coal India",
+    "JSW Steel", "Tata Consumer", "Eicher Motors", "BPCL", "Tech Mahindra",
+    "Dr Reddy", "Cipla", "UPL", "Shree Cement", "Havells", "Pidilite", "Britannia",
+    "Divi's Lab", "SBI Life", "HDFC Life", "Berger Paints", "Bandhan Bank",
+    "Adani Ports", "Adani Green", "Adani Total Gas", "Adani Power", "Adani Enterprises",
+    "ONGC", "IOC", "Vedanta", "Godrej Consumer", "Bajaj Auto", "TVS Motor",
+    "Hero MotoCorp", "Ashok Leyland", "Tata Power", "GAIL", "Ambuja Cement",
+    "ACC", "UltraTech", "Shriram Finance", "SBI Cards", "Zomato", "Paytm",
+    "Nykaa", "Policybazaar", "Trent", "Avenue Supermarts", "DMart", "Jubilant",
+    "Page Industries", "MRF", "Apollo Hospitals", "Fortis Healthcare", "Max Healthcare",
+    "Lupin", "Torrent Pharma", "Biocon", "Aurobindo Pharma", "Alkem Labs",
+    "ICICI Lombard", "ICICI Prudential", "Bajaj Allianz", "PNB", "Bank of Baroda",
+    "Canara Bank", "Union Bank", "Indian Bank", "IDFC First", "Federal Bank",
+    "AU Small Finance", "RBL Bank", "Yes Bank", "DLF", "Prestige Estates",
+    "Godrej Properties", "Oberoi Realty", "Phoenix Mills", "Brigade Enterprises",
+    "InterGlobe Aviation", "IndiGo", "SpiceJet", "Zydus Lifesciences", "Mankind Pharma"
     ]
     
     for stock in priority_stocks:
