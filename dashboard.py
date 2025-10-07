@@ -8,7 +8,7 @@ import time
 
 # Page config
 st.set_page_config(
-    page_title="Nifty 200 News & Twitter Dashboard",
+    page_title="Nifty 200 News Dashboard",
     page_icon="📈",
     layout="wide"
 )
@@ -40,7 +40,7 @@ NIFTY_200_STOCKS = [
     "InterGlobe Aviation", "IndiGo", "SpiceJet", "Zydus Lifesciences", "Mankind Pharma"
 ]
 
-# Alternative RSS feeds for financial news (Twitter/X RSS feeds are deprecated)
+# Alternative RSS feeds for financial news
 FINANCIAL_RSS_FEEDS = [
     ("https://feeds.feedburner.com/ndtvprofit-latest", "NDTV Profit"),
     ("https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms", "ET Markets"),
@@ -55,8 +55,8 @@ NEWS_AGE_LIMIT_HOURS = 48  # 2 days
 # --------------------------
 if 'news_articles' not in st.session_state:
     st.session_state.news_articles = []
-if 'tweets' not in st.session_state:
-    st.session_state.tweets = []
+if 'selected_stock' not in st.session_state:
+    st.session_state.selected_stock = "All Stocks"
 
 # --------------------------
 # Cache FinBERT model
@@ -108,6 +108,20 @@ def check_nifty_200_mention(text):
         if stock.upper() in text_upper:
             return True
     return False
+
+def check_specific_stock_mention(text, stock_name):
+    """Check if text mentions a specific stock"""
+    text_upper = text.upper()
+    return stock_name.upper() in text_upper
+
+def get_mentioned_stocks(text):
+    """Get list of stocks mentioned in the text"""
+    text_upper = text.upper()
+    mentioned = []
+    for stock in NIFTY_200_STOCKS:
+        if stock.upper() in text_upper:
+            mentioned.append(stock)
+    return mentioned
 
 def fetch_news(num_articles=15):
     """Fetch news articles mentioning Nifty 200 stocks from last 48 hours"""
@@ -181,64 +195,6 @@ def fetch_news(num_articles=15):
     
     return all_articles[:num_articles]
 
-def fetch_tweets(num_tweets=10):
-    """Fetch from financial news RSS feeds (Twitter RSS deprecated)"""
-    all_items = []
-    seen_content = {tweet['Title'] for tweet in st.session_state.tweets}
-    
-    # Use financial news feeds as alternative
-    feed_urls = [
-        ("https://www.business-standard.com/rss/markets-106.rss", "Business Standard"),
-        ("https://feeds.feedburner.com/ndtvprofit-latest", "NDTV Profit"),
-    ]
-    
-    for feed_url, source_name in feed_urls:
-        try:
-            feed = feedparser.parse(feed_url)
-            
-            if not feed.entries:
-                continue
-            
-            for entry in feed.entries[:5]:
-                # Get content
-                if hasattr(entry, 'title'):
-                    content = entry.title
-                elif hasattr(entry, 'summary'):
-                    content = entry.summary[:200]
-                else:
-                    continue
-                
-                # Skip if already seen
-                if content in seen_content:
-                    continue
-                
-                # Check if mentions Nifty 200 stocks
-                if not check_nifty_200_mention(content):
-                    continue
-                
-                # Check if recent
-                published = getattr(entry, 'published_parsed', None)
-                if not is_recent(published):
-                    continue
-                
-                all_items.append({
-                    'content': content,
-                    'link': entry.link if hasattr(entry, 'link') else '#',
-                    'account': source_name
-                })
-                seen_content.add(content)
-                
-                if len(all_items) >= num_tweets:
-                    break
-                    
-        except Exception as e:
-            continue
-        
-        if len(all_items) >= num_tweets:
-            break
-    
-    return all_items
-
 def process_news(articles):
     """Process news articles with sentiment analysis"""
     records = []
@@ -251,6 +207,9 @@ def process_news(articles):
         # Get published time
         published = getattr(art, 'published', 'Unknown')
         
+        # Get mentioned stocks
+        mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
+        
         sentiment_result = finbert(title[:512])[0]
         sentiment = sentiment_result["label"].lower()
         score = sentiment_result["score"]
@@ -261,36 +220,23 @@ def process_news(articles):
             "Sentiment": sentiment,
             "Score": round(score, 2),
             "Link": url,
-            "Type": "News",
-            "Published": published
+            "Published": published,
+            "Stocks": mentioned_stocks
         })
     
     return records
 
-def process_tweets(tweets):
-    """Process tweets with sentiment analysis"""
-    records = []
+def filter_news_by_stock(news_articles, stock_name):
+    """Filter news articles by specific stock"""
+    if stock_name == "All Stocks":
+        return news_articles
     
-    for tweet_data in tweets:
-        content = tweet_data['content']
-        account = tweet_data['account']
-        link = tweet_data['link']
-        
-        sentiment_result = finbert(content[:512])[0]
-        sentiment = sentiment_result["label"].lower()
-        score = sentiment_result["score"]
-        
-        records.append({
-            "Title": content,
-            "Source": account,
-            "Sentiment": sentiment,
-            "Score": round(score, 2),
-            "Link": link,
-            "Type": "News Feed",
-            "Published": "Recent"
-        })
+    filtered = []
+    for article in news_articles:
+        if stock_name in article.get('Stocks', []):
+            filtered.append(article)
     
-    return records
+    return filtered
 
 # --------------------------
 # Streamlit App
@@ -300,13 +246,24 @@ st.markdown("*Real-time news about Nifty 200 stocks with sentiment analysis*")
 st.markdown(f"**Showing news from last 2 days** | **{len(NIFTY_200_STOCKS)} stocks tracked**")
 st.markdown("---")
 
-# Refresh button
-col1, col2, col3 = st.columns([1, 2, 3])
+# Search/Filter and Refresh section
+col1, col2, col3 = st.columns([2, 2, 2])
+
 with col1:
-    if st.button("🔄 Refresh", type="primary", use_container_width=True):
+    # Stock filter dropdown
+    stock_options = ["All Stocks"] + sorted(NIFTY_200_STOCKS)
+    selected_stock = st.selectbox(
+        "🔍 Filter by Stock",
+        options=stock_options,
+        index=stock_options.index(st.session_state.selected_stock),
+        key="stock_filter"
+    )
+    st.session_state.selected_stock = selected_stock
+
+with col2:
+    if st.button("🔄 Refresh News", type="primary", use_container_width=True):
         with st.spinner("Fetching latest updates from last 48 hours..."):
             news_count = 0
-            feed_count = 0
             
             # Fetch news
             new_articles = fetch_news(ARTICLES_PER_REFRESH)
@@ -320,71 +277,53 @@ with col1:
                     if article['Title'] not in seen:
                         unique_articles.append(article)
                         seen.add(article['Title'])
-                st.session_state.news_articles = unique_articles[:50]  # Keep last 50
+                st.session_state.news_articles = unique_articles[:100]  # Keep last 100
                 news_count = len(processed_news)
             
-            # Fetch from news feeds
-            new_feeds = fetch_tweets(10)
-            if new_feeds:
-                processed_feeds = process_tweets(new_feeds)
-                st.session_state.tweets = processed_feeds + st.session_state.tweets
-                # Keep only unique items
-                seen = set()
-                unique_feeds = []
-                for item in st.session_state.tweets:
-                    if item['Title'] not in seen:
-                        unique_feeds.append(item)
-                        seen.add(item['Title'])
-                st.session_state.tweets = unique_feeds[:50]  # Keep last 50
-                feed_count = len(processed_feeds)
-            
-            st.success(f"✅ Added {news_count} news articles + {feed_count} feed items (last 48 hours)!")
+            st.success(f"✅ Added {news_count} news articles (last 48 hours)!")
             st.rerun()
 
+with col3:
+    if st.button("🗑️ Clear All", use_container_width=True):
+        st.session_state.news_articles = []
+        st.success("✅ Cleared all news!")
+        st.rerun()
+
 # Load initial content if empty
-if not st.session_state.news_articles and not st.session_state.tweets:
+if not st.session_state.news_articles:
     with st.spinner("Loading initial content from last 48 hours..."):
         initial_news = fetch_news(ARTICLES_PER_REFRESH)
-        initial_tweets = fetch_tweets(10)
         
         if initial_news:
             st.session_state.news_articles = process_news(initial_news)
-        if initial_tweets:
-            st.session_state.tweets = process_tweets(initial_tweets)
 
-# Combine all content for overall sentiment
-all_content = st.session_state.news_articles + st.session_state.tweets
+# Filter news based on selected stock
+filtered_articles = filter_news_by_stock(st.session_state.news_articles, st.session_state.selected_stock)
 
-if all_content:
-    df_all = pd.DataFrame(all_content)
+if filtered_articles:
+    df_all = pd.DataFrame(filtered_articles)
     
     # Display overall metrics
-    st.subheader("📊 Overall Metrics (Last 48 Hours)")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    st.subheader(f"📊 Metrics for {st.session_state.selected_stock}")
+    col1, col2, col3, col4 = st.columns(4)
     
     total_items = len(df_all)
-    news_count = len(st.session_state.news_articles)
-    feed_count = len(st.session_state.tweets)
     positive_count = len(df_all[df_all['Sentiment'].str.lower() == 'positive'])
     neutral_count = len(df_all[df_all['Sentiment'].str.lower() == 'neutral'])
     negative_count = len(df_all[df_all['Sentiment'].str.lower() == 'negative'])
     
     with col1:
-        st.metric("Total Items", total_items)
+        st.metric("Total Articles", total_items)
     with col2:
-        st.metric("News Articles", news_count)
-    with col3:
-        st.metric("News Feeds", feed_count)
-    with col4:
         st.metric("🟢 Positive", positive_count)
-    with col5:
+    with col3:
         st.metric("⚪ Neutral", neutral_count)
-    with col6:
+    with col4:
         st.metric("🔴 Negative", negative_count)
     
     st.markdown("---")
     
-    # Overall Sentiment Chart
+    # Sentiment Chart
     st.subheader("📊 Sentiment Distribution")
     sentiment_counts = df_all['Sentiment'].value_counts().reset_index()
     sentiment_counts.columns = ["Sentiment", "Count"]
@@ -399,7 +338,7 @@ if all_content:
             "neutral": "gray",
             "negative": "red"
         },
-        title="Sentiment Analysis of All Content (Last 48 Hours)",
+        title=f"Sentiment Analysis for {st.session_state.selected_stock} (Last 48 Hours)",
         text="Count"
     )
     fig.update_traces(textposition='outside')
@@ -407,73 +346,44 @@ if all_content:
     
     st.markdown("---")
     
-    # Two column layout for News and Feeds
-    col_news, col_feeds = st.columns(2)
+    # News Articles
+    st.subheader(f"📰 News Articles for {st.session_state.selected_stock}")
     
-    # News Column
-    with col_news:
-        st.subheader("📰 News Articles (Nifty 200)")
-        
-        if st.session_state.news_articles:
-            for article in st.session_state.news_articles:
-                with st.container():
-                    sentiment_color = {
-                        "positive": "#28a745",
-                        "neutral": "#6c757d",
-                        "negative": "#dc3545"
-                    }
-                    
-                    sentiment_emoji = {
-                        "positive": "🟢",
-                        "neutral": "⚪",
-                        "negative": "🔴"
-                    }
-                    
-                    st.markdown(f"**[{article['Title']}]({article['Link']})**")
-                    
-                    # Sentiment badge with confidence
-                    sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
-                    st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
-                    
-                    st.caption(f"Source: {article['Source']} | {article.get('Published', 'Recent')}")
-                    st.markdown("---")
-        else:
-            st.info("No news articles yet. Click Refresh!")
-    
-    # News Feeds Column
-    with col_feeds:
-        st.subheader("📡 Financial News Feeds")
-        
-        if st.session_state.tweets:
-            for item in st.session_state.tweets:
-                with st.container():
-                    sentiment_color = {
-                        "positive": "#28a745",
-                        "neutral": "#6c757d",
-                        "negative": "#dc3545"
-                    }
-                    
-                    sentiment_emoji = {
-                        "positive": "🟢",
-                        "neutral": "⚪",
-                        "negative": "🔴"
-                    }
-                    
-                    st.markdown(f"**[{item['Title'][:150]}...]({item['Link']})**")
-                    
-                    # Sentiment badge with confidence
-                    sentiment_text = f"{sentiment_emoji[item['Sentiment']]} {item['Sentiment'].upper()} (confidence: {item['Score']})"
-                    st.markdown(f"<span style='background-color: {sentiment_color[item['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
-                    
-                    st.caption(f"Source: {item['Source']}")
-                    st.markdown("---")
-        else:
-            st.info("No feed items yet. Click Refresh!")
+    for article in filtered_articles:
+        with st.container():
+            sentiment_color = {
+                "positive": "#28a745",
+                "neutral": "#6c757d",
+                "negative": "#dc3545"
+            }
+            
+            sentiment_emoji = {
+                "positive": "🟢",
+                "neutral": "⚪",
+                "negative": "🔴"
+            }
+            
+            st.markdown(f"**[{article['Title']}]({article['Link']})**")
+            
+            # Sentiment badge with confidence
+            sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
+            st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
+            
+            # Show mentioned stocks
+            if article.get('Stocks'):
+                stocks_text = ", ".join(article['Stocks'][:5])  # Show first 5 stocks
+                st.caption(f"📊 Stocks mentioned: {stocks_text}")
+            
+            st.caption(f"Source: {article['Source']} | {article.get('Published', 'Recent')}")
+            st.markdown("---")
 
 else:
-    st.info("👆 Click 'Refresh' to load content from the last 48 hours.")
+    if st.session_state.selected_stock == "All Stocks":
+        st.info("👆 Click 'Refresh News' to load content from the last 48 hours.")
+    else:
+        st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing or select 'All Stocks'.")
 
 # Footer
 st.markdown("---")
 st.caption("💡 Dashboard shows news from last 48 hours for Nifty 200 stocks | Sentiment confidence scores show model certainty")
-st.caption("⚠️ Note: X/Twitter RSS feeds are no longer available. Using alternative financial news sources.")
+st.caption("🔍 Use the filter dropdown to search for specific stocks")
