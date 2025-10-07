@@ -123,13 +123,18 @@ def get_mentioned_stocks(text):
             mentioned.append(stock)
     return mentioned
 
-def fetch_news(num_articles=15):
+def fetch_news(num_articles=15, specific_stock=None):
     """Fetch news articles mentioning Nifty 200 stocks from last 48 hours"""
     all_articles = []
     seen_titles = {article['Title'] for article in st.session_state.news_articles}
     
-    # Priority stocks for focused searching
-    priority_stocks = NIFTY_200_STOCKS[:30]  # Top 30 stocks
+    # If specific stock is selected, prioritize it
+    if specific_stock and specific_stock != "All Stocks":
+        priority_stocks = [specific_stock] + [s for s in NIFTY_200_STOCKS[:30] if s != specific_stock]
+        num_articles = num_articles * 2  # Fetch more articles for specific stock
+    else:
+        # Priority stocks for focused searching
+        priority_stocks = NIFTY_200_STOCKS[:30]  # Top 30 stocks
     
     for stock in priority_stocks:
         try:
