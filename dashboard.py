@@ -101,6 +101,52 @@ def is_recent(published_time, hours_limit=NEWS_AGE_LIMIT_HOURS):
     except Exception as e:
         return True  # Include if there's any error
 
+def convert_to_ist(published_time):
+    """Convert published time to IST"""
+    try:
+        if not published_time or published_time == "Unknown":
+            return "Recent"
+        
+        pub_time = None
+        if hasattr(published_time, 'tm_year'):
+            pub_time = datetime(*published_time[:6])
+        elif isinstance(published_time, str):
+            # Try common date formats
+            for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%a, %d %b %Y %H:%M:%S %z', '%Y-%m-%dT%H:%M:%S%z']:
+                try:
+                    pub_time = datetime.strptime(published_time, fmt)
+                    break
+                except:
+                    continue
+        
+        if pub_time:
+            # Convert to IST (UTC+5:30)
+            if pub_time.tzinfo:
+                pub_time = pub_time.replace(tzinfo=None)
+            
+            # Add 5 hours 30 minutes for IST
+            ist_time = pub_time + timedelta(hours=5, minutes=30)
+            
+            # Format nicely
+            now = datetime.now()
+            time_diff = now - ist_time
+            
+            if time_diff.days == 0:
+                if time_diff.seconds < 3600:
+                    minutes = time_diff.seconds // 60
+                    return f"{minutes} minutes ago"
+                else:
+                    hours = time_diff.seconds // 3600
+                    return f"{hours} hours ago"
+            elif time_diff.days == 1:
+                return "Yesterday " + ist_time.strftime("%I:%M %p IST")
+            else:
+                return ist_time.strftime("%d %b %Y, %I:%M %p IST")
+        
+        return "Recent"
+    except Exception as e:
+        return "Recent"
+
 def check_nifty_200_mention(text):
     """Check if text mentions any Nifty 200 stock"""
     text_upper = text.upper()
@@ -118,6 +164,11 @@ def get_mentioned_stocks(text):
     """Get list of stocks mentioned in the text"""
     text_upper = text.upper()
     mentioned = []
+    for stock in NIFTY_200_STOCKS:
+        if stock.upper() in text_upper:
+            if stock not in mentioned:  # Avoid duplicates
+                mentioned.append(stock)
+    return mentioned if mentioned else ["Other"]  # Return "Other" if no stock foundd = []
     for stock in NIFTY_200_STOCKS:
         if stock.upper() in text_upper:
             mentioned.append(stock)
@@ -142,7 +193,10 @@ def fetch_news(num_articles=15, specific_stock=None):
             url = f"https://news.google.com/rss/search?q={stock}+stock+india+when:2d&hl=en-IN&gl=IN&ceid=IN:en"
             feed = feedparser.parse(url)
             
-            for entry in feed.entries[:2]:  # Top 2 articles per stock
+            # Get more articles for specific stock
+            articles_per_stock = 5 if specific_stock == stock else 2
+            
+            for entry in feed.entries[:articles_per_stock]:
                 title = entry.title
                 
                 # Skip if already seen
@@ -209,8 +263,9 @@ def process_news(articles):
         source = getattr(art, "source", {}).get("title", "Unknown") if hasattr(art, "source") else "Unknown"
         url = art.link
         
-        # Get published time
+        # Get published time and convert to IST
         published = getattr(art, 'published', 'Unknown')
+        published_ist = convert_to_ist(published)
         
         # Get mentioned stocks
         mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
@@ -225,7 +280,7 @@ def process_news(articles):
             "Sentiment": sentiment,
             "Score": round(score, 2),
             "Link": url,
-            "Published": published,
+            "Published": published_ist,
             "Stocks": mentioned_stocks
         })
     
@@ -267,11 +322,11 @@ with col1:
 
 with col2:
     if st.button("🔄 Refresh News", type="primary", use_container_width=True):
-        with st.spinner("Fetching latest updates from last 48 hours..."):
+        with st.spinner(f"Fetching latest updates for {st.session_state.selected_stock}..."):
             news_count = 0
             
-            # Fetch news
-            new_articles = fetch_news(ARTICLES_PER_REFRESH)
+            # Fetch news - pass selected stock for targeted fetching
+            new_articles = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
             if new_articles:
                 processed_news = process_news(new_articles)
                 st.session_state.news_articles = processed_news + st.session_state.news_articles
@@ -285,7 +340,7 @@ with col2:
                 st.session_state.news_articles = unique_articles[:100]  # Keep last 100
                 news_count = len(processed_news)
             
-            st.success(f"✅ Added {news_count} news articles (last 48 hours)!")
+            st.success(f"✅ Added {news_count} news articles for {st.session_state.selected_stock}!")
             st.rerun()
 
 with col3:
@@ -296,8 +351,8 @@ with col3:
 
 # Load initial content if empty
 if not st.session_state.news_articles:
-    with st.spinner("Loading initial content from last 48 hours..."):
-        initial_news = fetch_news(ARTICLES_PER_REFRESH)
+    with st.spinner(f"Loading initial content for {st.session_state.selected_stock}..."):
+        initial_news = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
         
         if initial_news:
             st.session_state.news_articles = process_news(initial_news)
