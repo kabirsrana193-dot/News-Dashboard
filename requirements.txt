@@ -1,9 +1,9 @@
 streamlit
-feedparser
-transformers
+yfinance
 pandas
-plotly
-torch
-torchvision
+numpy
+matplotlib
+seaborn
+
 
 
