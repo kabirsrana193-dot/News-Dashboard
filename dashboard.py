@@ -1,4 +1,5 @@
 import streamlit as st
+import torch
 import feedparser
 from transformers import pipeline
 import pandas as pd
