@@ -536,8 +536,12 @@ with tab2:
         
         st.info(f"Showing {len(filtered_earnings)} companies")
         
-        # Sort by date
-        filtered_earnings = filtered_earnings.sort_values('Date')
+        # Sort by date if Date column exists
+        if 'Date' in filtered_earnings.columns and len(filtered_earnings) > 0:
+            try:
+                filtered_earnings = filtered_earnings.sort_values('Date')
+            except:
+                pass  # Skip sorting if it fails
         
         # Display as table
         st.dataframe(
