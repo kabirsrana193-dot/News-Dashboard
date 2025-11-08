@@ -1,12 +1,11 @@
 import streamlit as st
-import torch
 import feedparser
-from transformers import pipeline
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 import time
 import yfinance as yf
+import re
 
 # Page config
 st.set_page_config(
@@ -42,7 +41,7 @@ NIFTY_200_STOCKS = [
     "InterGlobe Aviation", "IndiGo", "SpiceJet", "Zydus Lifesciences", "Mankind Pharma"
 ]
 
-# Stock ticker mapping (name to Yahoo Finance symbol)
+# Stock ticker mapping
 STOCK_TICKER_MAP = {
     "Reliance": "RELIANCE.NS", "TCS": "TCS.NS", "HDFC Bank": "HDFCBANK.NS",
     "Infosys": "INFY.NS", "ICICI Bank": "ICICIBANK.NS", "Bharti Airtel": "BHARTIARTL.NS",
@@ -65,7 +64,6 @@ STOCK_TICKER_MAP = {
     "IOC": "IOC.NS", "Vedanta": "VEDL.NS", "Bajaj Auto": "BAJAJ-AUTO.NS"
 }
 
-# Alternative RSS feeds for financial news
 FINANCIAL_RSS_FEEDS = [
     ("https://feeds.feedburner.com/ndtvprofit-latest", "NDTV Profit"),
     ("https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms", "ET Markets"),
@@ -74,6 +72,12 @@ FINANCIAL_RSS_FEEDS = [
 
 ARTICLES_PER_REFRESH = 15
 NEWS_AGE_LIMIT_HOURS = 48
+
+# Sentiment keywords (simplified sentiment without heavy ML)
+POSITIVE_WORDS = ['surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
+                  'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive']
+NEGATIVE_WORDS = ['fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
+                  'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative']
 
 # --------------------------
 # Initialize session state
@@ -88,13 +92,25 @@ if 'last_earnings_fetch' not in st.session_state:
     st.session_state.last_earnings_fetch = None
 
 # --------------------------
-# Cache FinBERT model
+# Lightweight sentiment analysis
 # --------------------------
-@st.cache_resource
-def load_model():
-    return pipeline("sentiment-analysis", model="yiyanghkust/finbert-tone")
-
-finbert = load_model()
+def analyze_sentiment(text):
+    """Simple keyword-based sentiment analysis"""
+    text_lower = text.lower()
+    positive_count = sum(1 for word in POSITIVE_WORDS if word in text_lower)
+    negative_count = sum(1 for word in NEGATIVE_WORDS if word in text_lower)
+    
+    if positive_count > negative_count:
+        sentiment = "positive"
+        score = min(0.6 + (positive_count * 0.1), 0.95)
+    elif negative_count > positive_count:
+        sentiment = "negative"
+        score = min(0.6 + (negative_count * 0.1), 0.95)
+    else:
+        sentiment = "neutral"
+        score = 0.5
+    
+    return sentiment, round(score, 2)
 
 # --------------------------
 # NEWS Functions
@@ -251,15 +267,14 @@ def process_news(articles):
         published = getattr(art, 'published', 'Unknown')
         mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
         
-        sentiment_result = finbert(title[:512])[0]
-        sentiment = sentiment_result["label"].lower()
-        score = sentiment_result["score"]
+        # Use lightweight sentiment analysis
+        sentiment, score = analyze_sentiment(title)
         
         records.append({
             "Title": title,
             "Source": source,
             "Sentiment": sentiment,
-            "Score": round(score, 2),
+            "Score": score,
             "Link": url,
             "Published": published,
             "Stocks": mentioned_stocks
@@ -284,12 +299,16 @@ def fetch_earnings_data(stocks_to_fetch=50):
     """Fetch earnings data for Nifty 200 stocks"""
     earnings_list = []
     
-    for stock_name in NIFTY_200_STOCKS[:stocks_to_fetch]:
+    progress_placeholder = st.empty()
+    
+    for idx, stock_name in enumerate(NIFTY_200_STOCKS[:stocks_to_fetch]):
         ticker = STOCK_TICKER_MAP.get(stock_name)
         if not ticker:
             continue
         
         try:
+            progress_placeholder.text(f"Fetching {stock_name}... ({idx+1}/{stocks_to_fetch})")
+            
             stock = yf.Ticker(ticker)
             info = stock.info
             
@@ -338,11 +357,12 @@ def fetch_earnings_data(stocks_to_fetch=50):
                 'Market Cap': f"₹{info.get('marketCap', 0)/10000000:.2f} Cr" if info.get('marketCap') else 'N/A'
             })
             
-            time.sleep(0.3)  # Rate limiting
+            time.sleep(0.3)
             
         except Exception as e:
             continue
     
+    progress_placeholder.empty()
     return earnings_list
 
 # --------------------------
@@ -361,7 +381,6 @@ with tab1:
     st.markdown(f"**Showing news from last 2 days** | **{len(NIFTY_200_STOCKS)} stocks tracked**")
     st.markdown("---")
 
-    # Search/Filter and Refresh section
     col1, col2, col3 = st.columns([2, 2, 2])
 
     with col1:
@@ -390,7 +409,7 @@ with tab1:
                             seen.add(article['Title'])
                     st.session_state.news_articles = unique_articles[:100]
                     news_count = len(processed_news)
-                st.success(f"✅ Added {news_count} news articles for {st.session_state.selected_stock}!")
+                st.success(f"✅ Added {news_count} news articles!")
                 st.rerun()
 
     with col3:
@@ -399,20 +418,17 @@ with tab1:
             st.success("✅ Cleared all news!")
             st.rerun()
 
-    # Load initial content if empty
     if not st.session_state.news_articles:
-        with st.spinner(f"Loading initial content for {st.session_state.selected_stock}..."):
+        with st.spinner(f"Loading initial content..."):
             initial_news = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
             if initial_news:
                 st.session_state.news_articles = process_news(initial_news)
 
-    # Filter news based on selected stock
     filtered_articles = filter_news_by_stock(st.session_state.news_articles, st.session_state.selected_stock)
 
     if filtered_articles:
         df_all = pd.DataFrame(filtered_articles)
         
-        # Display overall metrics
         st.subheader(f"📊 Metrics for {st.session_state.selected_stock}")
         col1, col2, col3, col4 = st.columns(4)
         
@@ -432,7 +448,6 @@ with tab1:
         
         st.markdown("---")
         
-        # Sentiment Chart
         st.subheader("📊 Sentiment Distribution")
         sentiment_counts = df_all['Sentiment'].value_counts().reset_index()
         sentiment_counts.columns = ["Sentiment", "Count"]
@@ -447,7 +462,7 @@ with tab1:
                 "neutral": "gray",
                 "negative": "red"
             },
-            title=f"Sentiment Analysis for {st.session_state.selected_stock} (Last 48 Hours)",
+            title=f"Sentiment Analysis for {st.session_state.selected_stock}",
             text="Count"
         )
         fig.update_traces(textposition='outside')
@@ -455,7 +470,6 @@ with tab1:
         
         st.markdown("---")
         
-        # News Articles
         st.subheader(f"📰 News Articles for {st.session_state.selected_stock}")
         
         for article in filtered_articles:
@@ -523,9 +537,8 @@ with tab2:
             minutes_ago = int(time_ago.total_seconds() / 60)
             st.info(f"⏱️ Updated {minutes_ago}m ago")
     
-    # Load initial earnings data
     if not st.session_state.earnings_data:
-        with st.spinner(f"Loading earnings data for {stocks_to_load} stocks..."):
+        with st.spinner(f"Loading earnings data..."):
             earnings = fetch_earnings_data(stocks_to_load)
             st.session_state.earnings_data = earnings
             st.session_state.last_earnings_fetch = datetime.now()
@@ -533,7 +546,6 @@ with tab2:
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
-        # Metrics
         st.subheader("📊 Earnings Overview")
         col1, col2, col3, col4 = st.columns(4)
         
@@ -544,14 +556,23 @@ with tab2:
         with col2:
             st.metric("Scheduled Earnings", scheduled)
         with col3:
-            avg_pe = df_earnings[df_earnings['PE Ratio'] != 'N/A']['PE Ratio'].apply(lambda x: float(x) if isinstance(x, str) and x != 'N/A' else 0).mean()
-            st.metric("Avg PE Ratio", f"{avg_pe:.2f}" if avg_pe > 0 else "N/A")
+            try:
+                pe_values = []
+                for val in df_earnings['PE Ratio']:
+                    if val != 'N/A':
+                        try:
+                            pe_values.append(float(val))
+                        except:
+                            pass
+                avg_pe = sum(pe_values) / len(pe_values) if pe_values else 0
+                st.metric("Avg PE Ratio", f"{avg_pe:.2f}" if avg_pe > 0 else "N/A")
+            except:
+                st.metric("Avg PE Ratio", "N/A")
         with col4:
             st.metric("Data Points", len(df_earnings) * 8)
         
         st.markdown("---")
         
-        # Search functionality
         search_earnings = st.text_input("🔍 Search by Stock Name or Symbol", "")
         
         if search_earnings:
@@ -562,14 +583,12 @@ with tab2:
         
         st.info(f"Showing {len(filtered_earnings)} stocks")
         
-        # Display earnings table
         st.dataframe(
             filtered_earnings,
             use_container_width=True,
             height=600
         )
         
-        # Download button
         csv_earnings = filtered_earnings.to_csv(index=False)
         st.download_button(
             label="📥 Download Earnings Data (CSV)",
@@ -580,7 +599,6 @@ with tab2:
     else:
         st.info("👆 Click 'Refresh Earnings' to load earnings data.")
 
-# Footer
 st.markdown("---")
 st.caption("💡 Dashboard shows news from last 48 hours and earnings data for Nifty 200 stocks")
-st.caption("🔍 Use filters and search to find specific information | Data refreshes hourly")
+st.caption("🔍 Sentiment analysis uses keyword-based approach | Data refreshes hourly")
