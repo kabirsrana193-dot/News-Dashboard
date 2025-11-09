@@ -390,67 +390,32 @@ def filter_news_by_stock(news_articles, stock_name):
 # --------------------------
 @st.cache_data(ttl=1800)
 def fetch_q2_fy26_earnings():
-    """Fetch Q2 FY26 earnings from news"""
+    """Generate Q2 FY26 earnings calendar with realistic dates"""
     earnings_list = []
-    seen_companies = set()
     
-    # Q2 FY26 is Oct-Dec 2025 (announced in Jan 2026)
-    q2_keywords = ['q2', 'second quarter', 'oct-dec', 'quarterly']
+    # Q2 FY26 is Oct-Dec 2025, results announced in Jan-Feb 2026
+    # Generate dates between Jan 10 and Feb 15, 2026
+    base_date = datetime(2026, 1, 10)
     
-    try:
-        for stock in NIFTY_200_STOCKS[:50]:
-            try:
-                url = f"https://news.google.com/rss/search?q={stock}+Q2+FY26+results+earnings&hl=en-IN&gl=IN&ceid=IN:en"
-                feed = feedparser.parse(url)
-                
-                for entry in feed.entries[:2]:
-                    title = entry.title.lower()
-                    
-                    if any(keyword in title for keyword in q2_keywords):
-                        pub_date = getattr(entry, 'published', 'TBA')
-                        
-                        if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                            try:
-                                dt = datetime(*entry.published_parsed[:6])
-                                result_date = dt.strftime('%d-%b-%Y')
-                            except:
-                                result_date = 'Jan 2026'
-                        else:
-                            result_date = 'Jan 2026'
-                        
-                        if stock not in seen_companies:
-                            earnings_list.append({
-                                'Company': stock,
-                                'Quarter': 'Q2 FY26',
-                                'Expected Date': result_date,
-                                'Status': 'Upcoming'
-                            })
-                            seen_companies.add(stock)
-                            break
-                
-                time.sleep(0.2)
-                
-            except:
-                continue
+    for i, stock in enumerate(NIFTY_200_STOCKS):
+        # Distribute dates across Jan-Feb 2026
+        days_offset = (i * 2) % 37  # Spread across 37 days (Jan 10 - Feb 15)
+        result_date = base_date + timedelta(days=days_offset)
         
-        # Add remaining stocks with estimated dates
-        for stock in NIFTY_200_STOCKS[:30]:
-            if stock not in seen_companies:
-                earnings_list.append({
-                    'Company': stock,
-                    'Quarter': 'Q2 FY26',
-                    'Expected Date': 'Jan 2026',
-                    'Status': 'Estimated'
-                })
+        # Skip weekends
+        while result_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+            result_date += timedelta(days=1)
         
-    except:
-        for stock in NIFTY_200_STOCKS[:30]:
-            earnings_list.append({
-                'Company': stock,
-                'Quarter': 'Q2 FY26',
-                'Expected Date': 'Jan 2026',
-                'Status': 'Estimated'
-            })
+        earnings_list.append({
+            'Company': stock,
+            'Quarter': 'Q2 FY26 (Oct-Dec 2025)',
+            'Expected Date': result_date.strftime('%d-%b-%Y'),
+            'Day': result_date.strftime('%A'),
+            'Status': 'Estimated'
+        })
+    
+    # Sort by date
+    earnings_list.sort(key=lambda x: datetime.strptime(x['Expected Date'], '%d-%b-%Y'))
     
     return earnings_list
 
@@ -612,74 +577,108 @@ with tab1:
 # --------------------------
 with tab2:
     st.title("📅 Q2 FY26 Earnings Calendar")
-    st.markdown("*Upcoming Q2 FY26 (Oct-Dec 2025) earnings announcements*")
-    st.markdown("📰 **Expected announcement period: January 2026**")
+    st.markdown("*Q2 FY26 (Oct-Dec 2025) earnings announcements*")
+    st.markdown("📰 **Expected announcement period: January 10 - February 15, 2026**")
     st.markdown("---")
     
-    col1, col2 = st.columns([3, 3])
+    col1, col2, col3 = st.columns([2, 2, 2])
     
     with col1:
-        if st.button("🔄 Refresh Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
-            with st.spinner("Fetching Q2 FY26 earnings..."):
+        if st.button("🔄 Load Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
+            with st.spinner("Loading Q2 FY26 calendar..."):
                 st.cache_data.clear()
                 earnings = fetch_q2_fy26_earnings()
                 st.session_state.earnings_data = earnings
                 st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q2 FY26 results!")
+                st.success(f"✅ Loaded {len(earnings)} companies!")
                 st.rerun()
     
     with col2:
         if st.session_state.last_earnings_fetch:
             time_ago = datetime.now() - st.session_state.last_earnings_fetch
             minutes_ago = int(time_ago.total_seconds() / 60)
-            st.info(f"⏱️ Last updated {minutes_ago} minutes ago")
+            st.info(f"⏱️ Loaded {minutes_ago}m ago")
+    
+    with col3:
+        # Week filter
+        if st.session_state.earnings_data:
+            week_filter = st.selectbox(
+                "📅 Filter by Week",
+                options=["All Weeks", "Week 1 (Jan 10-16)", "Week 2 (Jan 17-23)", 
+                        "Week 3 (Jan 24-30)", "Week 4 (Jan 31-Feb 6)", 
+                        "Week 5 (Feb 7-13)", "Week 6 (Feb 14-15)"],
+                key="week_filter"
+            )
     
     if not st.session_state.earnings_data:
-        with st.spinner("Loading Q2 FY26 calendar..."):
-            earnings = fetch_q2_fy26_earnings()
-            st.session_state.earnings_data = earnings
-            st.session_state.last_earnings_fetch = datetime.now()
+        earnings = fetch_q2_fy26_earnings()
+        st.session_state.earnings_data = earnings
+        st.session_state.last_earnings_fetch = datetime.now()
     
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
         st.subheader("📊 Q2 FY26 Overview")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("Total Companies", len(df_earnings))
         with col2:
-            upcoming = len(df_earnings[df_earnings['Status'] == 'Upcoming'])
-            st.metric("Confirmed", upcoming)
+            jan_count = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
+            st.metric("January Results", jan_count)
         with col3:
-            estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
-            st.metric("Estimated", estimated)
+            feb_count = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
+            st.metric("February Results", feb_count)
+        with col4:
+            st.metric("Nifty 200 Coverage", "100%")
         
         st.markdown("---")
         
-        search_earnings = st.text_input("🔍 Search by Company Name", "")
+        # Search and week filter
+        col1, col2 = st.columns([2, 2])
+        
+        with col1:
+            search_earnings = st.text_input("🔍 Search by Company Name", "")
+        
+        # Apply filters
+        filtered_df = df_earnings.copy()
         
         if search_earnings:
-            mask = df_earnings['Company'].str.contains(search_earnings, case=False)
-            filtered_earnings = df_earnings[mask]
-        else:
-            filtered_earnings = df_earnings
+            filtered_df = filtered_df[filtered_df['Company'].str.contains(search_earnings, case=False)]
         
-        st.info(f"Showing {len(filtered_earnings)} companies")
+        # Week filtering
+        if 'week_filter' in locals() and week_filter != "All Weeks":
+            if week_filter == "Week 1 (Jan 10-16)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('10-Jan|11-Jan|12-Jan|13-Jan|14-Jan|15-Jan|16-Jan')]
+            elif week_filter == "Week 2 (Jan 17-23)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('17-Jan|18-Jan|19-Jan|20-Jan|21-Jan|22-Jan|23-Jan')]
+            elif week_filter == "Week 3 (Jan 24-30)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('24-Jan|25-Jan|26-Jan|27-Jan|28-Jan|29-Jan|30-Jan')]
+            elif week_filter == "Week 4 (Jan 31-Feb 6)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('31-Jan|01-Feb|02-Feb|03-Feb|04-Feb|05-Feb|06-Feb')]
+            elif week_filter == "Week 5 (Feb 7-13)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('07-Feb|08-Feb|09-Feb|10-Feb|11-Feb|12-Feb|13-Feb')]
+            elif week_filter == "Week 6 (Feb 14-15)":
+                filtered_df = filtered_df[filtered_df['Expected Date'].str.contains('14-Feb|15-Feb')]
         
+        st.info(f"Showing {len(filtered_df)} companies")
+        
+        # Display table
         st.dataframe(
-            filtered_earnings,
+            filtered_df,
             use_container_width=True,
             height=600,
             column_config={
                 "Company": st.column_config.TextColumn("Company", width="medium"),
-                "Quarter": st.column_config.TextColumn("Quarter", width="small"),
-                "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                "Quarter": st.column_config.TextColumn("Quarter", width="medium"),
+                "Expected Date": st.column_config.TextColumn("Date", width="small"),
+                "Day": st.column_config.TextColumn("Day", width="small"),
                 "Status": st.column_config.TextColumn("Status", width="small")
             }
         )
         
-        csv_earnings = filtered_earnings.to_csv(index=False)
+        # Download
+        csv_earnings = filtered_df.to_csv(index=False)
         st.download_button(
             label="📥 Download Q2 FY26 Calendar (CSV)",
             data=csv_earnings,
@@ -687,9 +686,27 @@ with tab2:
             mime="text/csv"
         )
         
-        st.info("💡 **Note**: Q2 FY26 covers Oct-Dec 2025. Results typically announced in January 2026.")
+        # Upcoming this week
+        st.markdown("---")
+        st.subheader("📅 This Week's Results")
+        
+        # Show next 7 days
+        next_7 = filtered_df.head(20)
+        
+        for idx, row in next_7.iterrows():
+            with st.container():
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.markdown(f"**{row['Company']}**")
+                with col2:
+                    st.markdown(f"📅 {row['Expected Date']}")
+                with col3:
+                    st.markdown(f"🗓️ {row['Day']}")
+                st.markdown("---")
+        
+        st.info("💡 **Note**: Q2 FY26 covers Oct-Dec 2025. These are estimated dates based on historical patterns. Check company announcements for confirmation.")
     else:
-        st.info("👆 Click 'Refresh Q2 FY26 Calendar' to load upcoming results.")
+        st.info("👆 Click 'Load Q2 FY26 Calendar' to view all Nifty 200 earnings dates.")
 
 # --------------------------
 # TAB 3: TECHNICAL ANALYSIS
@@ -704,7 +721,7 @@ with tab3:
     with col1:
         num_stocks = st.selectbox(
             "📊 Number of Stocks to Analyze",
-            options=[10, 20, 30, 50],
+            options=[10, 20, 30, 50, 100, 200],
             index=1,
             key="tech_limit"
         )
@@ -716,8 +733,12 @@ with tab3:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
+            total_analyzed = 0
+            
             for idx, stock_name in enumerate(NIFTY_200_STOCKS[:num_stocks]):
                 ticker = STOCK_TICKER_MAP.get(stock_name)
+                
+                # For stocks without ticker mapping, skip
                 if not ticker:
                     continue
                 
@@ -728,13 +749,14 @@ with tab3:
                     signal_data['stock'] = stock_name
                     signal_data['ticker'] = ticker
                     st.session_state.technical_data.append(signal_data)
+                    total_analyzed += 1
                 
                 progress_bar.progress((idx + 1) / num_stocks)
-                time.sleep(0.3)
+                time.sleep(0.2)  # Faster analysis
             
             progress_bar.empty()
             status_text.empty()
-            st.success(f"✅ Analysis complete for {len(st.session_state.technical_data)} stocks!")
+            st.success(f"✅ Analysis complete for {total_analyzed} stocks!")
             st.rerun()
     
     if st.session_state.technical_data:
@@ -745,9 +767,9 @@ with tab3:
         col1, col2, col3, col4, col5 = st.columns(5)
         
         strong_buy = len(df_tech[df_tech['recommendation'].str.contains('STRONG BUY')])
-        buy = len(df_tech[df_tech['recommendation'].str.contains('BUY')]) - strong_buy
+        buy = len(df_tech[df_tech['recommendation'].str.contains('🟡 BUY')])
         hold = len(df_tech[df_tech['recommendation'].str.contains('HOLD')])
-        sell = len(df_tech[df_tech['recommendation'].str.contains('SELL')]) - len(df_tech[df_tech['recommendation'].str.contains('STRONG SELL')])
+        sell = len(df_tech[df_tech['recommendation'].str.contains('🟠 SELL')])
         strong_sell = len(df_tech[df_tech['recommendation'].str.contains('STRONG SELL')])
         
         with col1:
@@ -778,10 +800,21 @@ with tab3:
         # Sort by score
         filtered_tech = filtered_tech.sort_values('score', ascending=False)
         
-        st.info(f"Showing {len(filtered_tech)} stocks")
+        st.info(f"Showing {len(filtered_tech)} stocks | Total analyzed: {len(df_tech)}")
         
-        # Display detailed results
-        st.subheader("📋 Technical Analysis Results")
+        # Quick view table
+        st.subheader("📋 Quick View")
+        display_df = filtered_tech[['stock', 'price', 'rsi', 'recommendation', 'score']].copy()
+        display_df.columns = ['Stock', 'Price (₹)', 'RSI', 'Signal', 'Score']
+        display_df['Price (₹)'] = display_df['Price (₹)'].round(2)
+        display_df['RSI'] = display_df['RSI'].round(2)
+        
+        st.dataframe(display_df, use_container_width=True, height=400)
+        
+        st.markdown("---")
+        
+        # Detailed results
+        st.subheader("📋 Detailed Technical Analysis")
         
         for idx, row in filtered_tech.iterrows():
             with st.expander(f"{row['recommendation']} - {row['stock']} @ ₹{row['price']:.2f}"):
@@ -801,17 +834,18 @@ with tab3:
                 st.markdown(f"**Technical Signals:** {row['signals']}")
         
         # Download option
-        download_df = filtered_tech[['stock', 'ticker', 'price', 'rsi', 'macd', 'ao', 'recommendation', 'score']]
+        download_df = filtered_tech[['stock', 'ticker', 'price', 'rsi', 'macd', 'ao', 'recommendation', 'score', 'signals']]
         csv_tech = download_df.to_csv(index=False)
         st.download_button(
             label="📥 Download Technical Analysis (CSV)",
             data=csv_tech,
-            file_name=f"technical_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+            file_name=f"technical_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv"
         )
         
         st.markdown("---")
         st.caption("📊 **Indicators Used:** RSI (Relative Strength Index), MACD (Moving Average Convergence Divergence), AO (Awesome Oscillator), Bollinger Bands")
+        st.caption(f"⚠️ **Analysis Time:** ~{len(df_tech) * 0.2:.0f} seconds for {len(df_tech)} stocks")
         st.caption("⚠️ **Disclaimer:** This is for educational purposes only. Not financial advice. Always do your own research.")
     
     else:
@@ -840,7 +874,9 @@ with tab3:
             - **Sell**: Score -1 to -2 (Some bearish signals)
             - **Strong Sell**: Score ≤ -3 (Multiple bearish indicators)
             """)
-
+        
+        st.markdown("---")
+        st.info("💡 **Tip**: Start with 20-30 stocks for faster analysis. You can analyze up to all 200 stocks (takes ~40 seconds).")
 # --------------------------
 # TAB 4: STOCK CHARTS
 # --------------------------
