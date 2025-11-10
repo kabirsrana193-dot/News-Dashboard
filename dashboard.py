@@ -581,4 +581,4 @@ with tab1:
         col1, col2, col3, col4 = st.columns(4)
         
         total_items = len(df_all)
-        positive_count = len(df_)
+        positive_count = len(df_all)
