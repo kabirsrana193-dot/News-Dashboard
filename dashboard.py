@@ -12,59 +12,122 @@ import numpy as np
 
 # Page config
 st.set_page_config(
-    page_title="Nifty 200 Dashboard",
+    page_title="Nifty F&O Dashboard",
     page_icon="📈",
     layout="wide"
 )
 
 # --------------------------
-# Config
+# Config - All F&O Stocks in India
 # --------------------------
-NIFTY_200_STOCKS = [
+FNO_STOCKS = [
     "Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel", "ITC",
-    "State Bank", "SBI", "Hindustan Unilever", "HUL", "Bajaj Finance", "Kotak Mahindra",
-    "LIC", "Axis Bank", "Larsen & Toubro", "L&T", "Asian Paints", "Maruti Suzuki",
-    "Titan", "Sun Pharma", "HCL Tech", "Ultratechn Cement", "Nestle", "Adani",
+    "State Bank of India", "SBI", "Hindustan Unilever", "HUL", "Bajaj Finance", 
+    "Kotak Mahindra Bank", "Axis Bank", "Larsen & Toubro", "L&T", "Asian Paints", 
+    "Maruti Suzuki", "Titan", "Sun Pharma", "HCL Tech", "Nestle", "Adani Enterprises",
     "Tata Motors", "Wipro", "Power Grid", "NTPC", "Bajaj Finserv", "Tata Steel",
-    "Grasim", "Hindalco", "IndusInd Bank", "Mahindra", "M&M", "Coal India",
+    "Hindalco", "IndusInd Bank", "Mahindra & Mahindra", "M&M", "Coal India",
     "JSW Steel", "Tata Consumer", "Eicher Motors", "BPCL", "Tech Mahindra",
-    "Dr Reddy", "Cipla", "UPL", "Shree Cement", "Havells", "Pidilite", "Britannia",
+    "Dr Reddy", "Cipla", "UPL", "Havells", "Pidilite", "Britannia",
     "Divi's Lab", "SBI Life", "HDFC Life", "Berger Paints", "Bandhan Bank",
-    "Adani Ports", "Adani Green", "Adani Total Gas", "Adani Power", "Adani Enterprises",
-    "ONGC", "IOC", "Vedanta", "Godrej Consumer", "Bajaj Auto", "TVS Motor",
-    "Hero MotoCorp", "Ashok Leyland", "Tata Power", "GAIL", "Ambuja Cement",
-    "ACC", "UltraTech", "Shriram Finance", "SBI Cards", "Zomato", "Paytm",
-    "Nykaa", "Policybazaar", "Trent", "Avenue Supermarts", "DMart", "Jubilant",
-    "Page Industries", "MRF", "Apollo Hospitals", "Fortis Healthcare", "Max Healthcare",
-    "Lupin", "Torrent Pharma", "Biocon", "Aurobindo Pharma", "Alkem Labs",
-    "ICICI Lombard", "ICICI Prudential", "Bajaj Allianz", "PNB", "Bank of Baroda",
-    "Canara Bank", "Union Bank", "Indian Bank", "IDFC First", "Federal Bank",
-    "AU Small Finance", "RBL Bank", "Yes Bank", "DLF", "Prestige Estates",
-    "Godrej Properties", "Oberoi Realty", "Phoenix Mills", "Brigade Enterprises",
-    "InterGlobe Aviation", "IndiGo", "SpiceJet", "Zydus Lifesciences", "Mankind Pharma"
+    "Adani Ports", "ONGC", "IOC", "Vedanta", "Godrej Consumer", "Bajaj Auto", 
+    "TVS Motor", "Hero MotoCorp", "Tata Power", "GAIL", "Ambuja Cement",
+    "ACC", "UltraTech", "Zomato", "Paytm", "Trent", "Avenue Supermarts", "DMart",
+    "Page Industries", "MRF", "Apollo Hospitals", "Lupin", "Torrent Pharma", 
+    "Biocon", "Aurobindo Pharma", "ICICI Lombard", "ICICI Prudential", 
+    "PNB", "Bank of Baroda", "Canara Bank", "Union Bank", "Indian Bank", 
+    "IDFC First", "Federal Bank", "AU Small Finance", "Yes Bank", "DLF", 
+    "Prestige Estates", "Godrej Properties", "Oberoi Realty", "InterGlobe Aviation",
+    "IndGo", "Adani Green", "Adani Total Gas", "Adani Power", "Grasim",
+    "Shree Cement", "Ashok Leyland", "Bosch", "ABB", "Siemens", "Voltas",
+    "Crompton", "Dixon", "Polycab", "Motherson Sumi", "Bharat Electronics", "BEL",
+    "HAL", "Bharat Forge", "Cummins", "Exide", "Amara Raja", "Balkrishna Industries",
+    "Apollo Tyres", "MRF Tyres", "CEAT", "JK Tyre", "Escorts", "Mahindra CIE",
+    "Sona BLW", "Samvardhana Motherson", "Muthoot Finance", "Shriram Finance",
+    "Cholamandalam", "LIC Housing Finance", "PFC", "REC", "IRFC", "Jindal Steel",
+    "Hindalco Industries", "National Aluminium", "NALCO", "Hindustan Zinc",
+    "Vedanta Limited", "NMDC", "SAIL", "Tata Chemicals", "PI Industries",
+    "Aarti Industries", "Deepak Nitrite", "SRF", "Balrampur Chini", "Dalmia Bharat",
+    "India Cements", "JK Cement", "Gujarat Ambuja", "Container Corporation",
+    "Concor", "IRCTC", "Rail Vikas Nigam", "RVNL", "NMDC Steel", "Max Healthcare",
+    "Fortis Healthcare", "Narayana Hrudayalaya", "Laurus Labs", "Granules India",
+    "Natco Pharma", "Glenmark", "Cadila Healthcare", "Mankind Pharma", 
+    "Zydus Lifesciences", "PVR Inox", "IEX", "Adani Wilmar", "Marico",
+    "Dabur", "Colgate", "Hindustan Foods", "Varun Beverages", "Tata Elxsi",
+    "Coforge", "Persistent Systems", "L&T Technology", "Mphasis", "Mindtree",
+    "LTIMindtree", "KPIT Technologies", "Info Edge", "Naukri", "Zomato Limited"
 ]
 
-# Stock ticker mapping
+# Stock ticker mapping - Comprehensive
 STOCK_TICKER_MAP = {
     "Reliance": "RELIANCE.NS", "TCS": "TCS.NS", "HDFC Bank": "HDFCBANK.NS",
     "Infosys": "INFY.NS", "ICICI Bank": "ICICIBANK.NS", "Bharti Airtel": "BHARTIARTL.NS",
-    "ITC": "ITC.NS", "State Bank": "SBIN.NS", "SBI": "SBIN.NS",
+    "ITC": "ITC.NS", "State Bank of India": "SBIN.NS", "SBI": "SBIN.NS",
     "Hindustan Unilever": "HINDUNILVR.NS", "HUL": "HINDUNILVR.NS",
-    "Bajaj Finance": "BAJFINANCE.NS", "Kotak Mahindra": "KOTAKBANK.NS",
+    "Bajaj Finance": "BAJFINANCE.NS", "Kotak Mahindra Bank": "KOTAKBANK.NS",
     "Axis Bank": "AXISBANK.NS", "Larsen & Toubro": "LT.NS", "L&T": "LT.NS",
     "Asian Paints": "ASIANPAINT.NS", "Maruti Suzuki": "MARUTI.NS",
     "Titan": "TITAN.NS", "Sun Pharma": "SUNPHARMA.NS", "HCL Tech": "HCLTECH.NS",
-    "Nestle": "NESTLEIND.NS", "Adani": "ADANIENT.NS", "Tata Motors": "TATAMOTORS.NS",
-    "Wipro": "WIPRO.NS", "Power Grid": "POWERGRID.NS", "NTPC": "NTPC.NS",
-    "Bajaj Finserv": "BAJAJFINSV.NS", "Tata Steel": "TATASTEEL.NS",
+    "Nestle": "NESTLEIND.NS", "Adani Enterprises": "ADANIENT.NS", 
+    "Tata Motors": "TATAMOTORS.NS", "Wipro": "WIPRO.NS", "Power Grid": "POWERGRID.NS", 
+    "NTPC": "NTPC.NS", "Bajaj Finserv": "BAJAJFINSV.NS", "Tata Steel": "TATASTEEL.NS",
     "Grasim": "GRASIM.NS", "Hindalco": "HINDALCO.NS", "IndusInd Bank": "INDUSINDBK.NS",
-    "Mahindra": "M&M.NS", "M&M": "M&M.NS", "Coal India": "COALINDIA.NS",
+    "Mahindra & Mahindra": "M&M.NS", "M&M": "M&M.NS", "Coal India": "COALINDIA.NS",
     "JSW Steel": "JSWSTEEL.NS", "Tata Consumer": "TATACONSUM.NS",
     "Eicher Motors": "EICHERMOT.NS", "BPCL": "BPCL.NS", "Tech Mahindra": "TECHM.NS",
     "Dr Reddy": "DRREDDY.NS", "Cipla": "CIPLA.NS", "UPL": "UPL.NS",
     "Shree Cement": "SHREECEM.NS", "Havells": "HAVELLS.NS", "Pidilite": "PIDILITIND.NS",
     "Britannia": "BRITANNIA.NS", "Divi's Lab": "DIVISLAB.NS", "ONGC": "ONGC.NS",
-    "IOC": "IOC.NS", "Vedanta": "VEDL.NS", "Bajaj Auto": "BAJAJ-AUTO.NS"
+    "IOC": "IOC.NS", "Vedanta": "VEDL.NS", "Bajaj Auto": "BAJAJ-AUTO.NS",
+    "SBI Life": "SBILIFE.NS", "HDFC Life": "HDFCLIFE.NS", "Adani Ports": "ADANIPORTS.NS",
+    "UltraTech": "ULTRACEMCO.NS", "Hero MotoCorp": "HEROMOTOCO.NS", "Tata Power": "TATAPOWER.NS",
+    "GAIL": "GAIL.NS", "Zomato": "ZOMATO.NS", "Paytm": "PAYTM.NS", "Trent": "TRENT.NS",
+    "Avenue Supermarts": "DMART.NS", "DMart": "DMART.NS", "MRF": "MRF.NS",
+    "Apollo Hospitals": "APOLLOHOSP.NS", "Lupin": "LUPIN.NS", "Torrent Pharma": "TORNTPHARM.NS",
+    "Biocon": "BIOCON.NS", "Aurobindo Pharma": "AUROPHARMA.NS", "DLF": "DLF.NS",
+    "Yes Bank": "YESBANK.NS", "Bank of Baroda": "BANKBARODA.NS", "PNB": "PNB.NS",
+    "Canara Bank": "CANBK.NS", "Union Bank": "UNIONBANK.NS", "Indian Bank": "INDIANB.NS",
+    "Federal Bank": "FEDERALBNK.NS", "IDFC First": "IDFCFIRSTB.NS", 
+    "AU Small Finance": "AUBANK.NS", "InterGlobe Aviation": "INDIGO.NS", "IndGo": "INDIGO.NS",
+    "Adani Green": "ADANIGREEN.NS", "Adani Total Gas": "ATGL.NS", "Adani Power": "ADANIPOWER.NS",
+    "Godrej Consumer": "GODREJCP.NS", "TVS Motor": "TVSMOTOR.NS", "ACC": "ACC.NS",
+    "Ambuja Cement": "AMBUJACEM.NS", "Berger Paints": "BERGEPAINT.NS", 
+    "Bandhan Bank": "BANDHANBNK.NS", "Ashok Leyland": "ASHOKLEY.NS",
+    "Bosch": "BOSCHLTD.NS", "ABB": "ABB.NS", "Siemens": "SIEMENS.NS",
+    "Bharat Electronics": "BEL.NS", "BEL": "BEL.NS", "HAL": "HAL.NS",
+    "Dixon": "DIXON.NS", "Polycab": "POLYCAB.NS", "Voltas": "VOLTAS.NS",
+    "Crompton": "CROMPTON.NS", "Motherson Sumi": "MOTHERSON.NS",
+    "Shriram Finance": "SHRIRAMFIN.NS", "LIC Housing Finance": "LICHSGFIN.NS",
+    "PFC": "PFC.NS", "REC": "RECLTD.NS", "Jindal Steel": "JINDALSTEL.NS",
+    "NMDC": "NMDC.NS", "SAIL": "SAIL.NS", "PI Industries": "PIIND.NS",
+    "SRF": "SRF.NS", "Container Corporation": "CONCOR.NS", "Concor": "CONCOR.NS",
+    "IRCTC": "IRCTC.NS", "Max Healthcare": "MAXHEALTH.NS", "Fortis Healthcare": "FORTIS.NS",
+    "Mankind Pharma": "MANKIND.NS", "Zydus Lifesciences": "ZYDUSLIFE.NS",
+    "IEX": "IEX.NS", "Adani Wilmar": "AWL.NS", "Marico": "MARICO.NS",
+    "Dabur": "DABUR.NS", "Colgate": "COLPAL.NS", "Varun Beverages": "VBL.NS",
+    "Tata Elxsi": "TATAELXSI.NS", "Coforge": "COFORGE.NS", "Persistent Systems": "PERSISTENT.NS",
+    "L&T Technology": "LTTS.NS", "Mphasis": "MPHASIS.NS", "LTIMindtree": "LTIM.NS",
+    "Info Edge": "NAUKRI.NS", "Naukri": "NAUKRI.NS", "Page Industries": "PAGEIND.NS",
+    "ICICI Lombard": "ICICIGI.NS", "ICICI Prudential": "ICICIPRULI.NS",
+    "Prestige Estates": "PRESTIGE.NS", "Godrej Properties": "GODREJPROP.NS",
+    "Oberoi Realty": "OBEROIRLTY.NS", "Bharat Forge": "BHARATFORG.NS",
+    "Cummins": "CUMMINSIND.NS", "Apollo Tyres": "APOLLOTYRE.NS", "Escorts": "ESCORTS.NS",
+    "Muthoot Finance": "MUTHOOTFIN.NS", "Cholamandalam": "CHOLAFIN.NS",
+    "National Aluminium": "NATIONALUM.NS", "NALCO": "NATIONALUM.NS",
+    "Hindustan Zinc": "HINDZINC.NS", "Vedanta Limited": "VEDL.NS",
+    "Tata Chemicals": "TATACHEM.NS", "Balrampur Chini": "BALRAMCHIN.NS",
+    "Dalmia Bharat": "DALBHARAT.NS", "JK Cement": "JKCEMENT.NS",
+    "Narayana Hrudayalaya": "NH.NS", "Laurus Labs": "LAURUSLABS.NS",
+    "Granules India": "GRANULES.NS", "Natco Pharma": "NATCOPHARM.NS",
+    "Glenmark": "GLENMARK.NS", "Cadila Healthcare": "ZYDUSLIFE.NS",
+    "PVR Inox": "PVRINOX.NS", "Deepak Nitrite": "DEEPAKNTR.NS",
+    "Aarti Industries": "AARTIIND.NS", "India Cements": "INDIACEM.NS",
+    "Exide": "EXIDEIND.NS", "Amara Raja": "AMARAJABAT.NS",
+    "Balkrishna Industries": "BALKRISIND.NS", "CEAT": "CEAT.NS",
+    "JK Tyre": "JKT YRE.NS", "Sona BLW": "SONACOMS.NS",
+    "Samvardhana Motherson": "MOTHERSON.NS", "IRFC": "IRFC.NS",
+    "Rail Vikas Nigam": "RVNL.NS", "RVNL": "RVNL.NS",
+    "KPIT Technologies": "KPITTECH.NS", "Gujarat Ambuja": "AMBUJACEM.NS"
 }
 
 FINANCIAL_RSS_FEEDS = [
@@ -121,13 +184,13 @@ def calculate_ao(high, low, fast=5, slow=34):
     ao = median_price.rolling(window=fast).mean() - median_price.rolling(window=slow).mean()
     return ao
 
-def calculate_bollinger_bands(data, period=20, std_dev=2):
-    """Calculate Bollinger Bands"""
-    sma = data.rolling(window=period).mean()
-    std = data.rolling(window=period).std()
-    upper_band = sma + (std * std_dev)
-    lower_band = sma - (std * std_dev)
-    return upper_band, sma, lower_band
+def calculate_sma(data, period):
+    """Calculate Simple Moving Average"""
+    return data.rolling(window=period).mean()
+
+def calculate_ema(data, period):
+    """Calculate Exponential Moving Average"""
+    return data.ewm(span=period, adjust=False).mean()
 
 def generate_signal(ticker_symbol):
     """Generate buy/sell signal based on technical indicators"""
@@ -142,7 +205,6 @@ def generate_signal(ticker_symbol):
         df['RSI'] = calculate_rsi(df['Close'])
         df['MACD'], df['Signal'] = calculate_macd(df['Close'])
         df['AO'] = calculate_ao(df['High'], df['Low'])
-        df['BB_Upper'], df['BB_Middle'], df['BB_Lower'] = calculate_bollinger_bands(df['Close'])
         
         # Get latest values
         current_price = df['Close'].iloc[-1]
@@ -150,8 +212,6 @@ def generate_signal(ticker_symbol):
         macd = df['MACD'].iloc[-1]
         signal_line = df['Signal'].iloc[-1]
         ao = df['AO'].iloc[-1]
-        bb_upper = df['BB_Upper'].iloc[-1]
-        bb_lower = df['BB_Lower'].iloc[-1]
         
         # Signal logic
         signals = []
@@ -182,14 +242,6 @@ def generate_signal(ticker_symbol):
             score += 1
         else:
             signals.append("AO Negative")
-            score -= 1
-        
-        # Bollinger Bands
-        if current_price < bb_lower:
-            signals.append("Below BB Lower")
-            score += 1
-        elif current_price > bb_upper:
-            signals.append("Above BB Upper")
             score -= 1
         
         # Final recommendation
@@ -267,10 +319,10 @@ def is_recent(published_time, hours_limit=NEWS_AGE_LIMIT_HOURS):
     except:
         return True
 
-def check_nifty_200_mention(text):
-    """Check if text mentions any Nifty 200 stock"""
+def check_fno_mention(text):
+    """Check if text mentions any F&O stock"""
     text_upper = text.upper()
-    for stock in NIFTY_200_STOCKS:
+    for stock in FNO_STOCKS:
         if stock.upper() in text_upper:
             return True
     return False
@@ -279,7 +331,7 @@ def get_mentioned_stocks(text):
     """Get list of stocks mentioned in the text"""
     text_upper = text.upper()
     mentioned = []
-    for stock in NIFTY_200_STOCKS:
+    for stock in FNO_STOCKS:
         if stock.upper() in text_upper:
             if stock not in mentioned:
                 mentioned.append(stock)
@@ -298,7 +350,7 @@ def fetch_news(num_articles=15, specific_stock=None, force_new=False):
         priority_stocks = [specific_stock]
         num_articles = num_articles * 3
     else:
-        priority_stocks = NIFTY_200_STOCKS[:30]
+        priority_stocks = FNO_STOCKS[:30]
     
     for stock in priority_stocks:
         try:
@@ -335,7 +387,7 @@ def fetch_news(num_articles=15, specific_stock=None, force_new=False):
                     if specific_stock.upper() not in full_text.upper():
                         continue
                 else:
-                    if not check_nifty_200_mention(full_text):
+                    if not check_fno_mention(full_text):
                         continue
                 
                 published = getattr(entry, 'published_parsed', None)
@@ -386,29 +438,75 @@ def filter_news_by_stock(news_articles, stock_name):
     return filtered
 
 # --------------------------
-# EARNINGS Functions - Q2 FY26 Only
+# EARNINGS Functions - Q2 FY25 (Jul-Sep 2024, Results in Oct-Nov 2024)
 # --------------------------
 @st.cache_data(ttl=1800)
-def fetch_q2_fy26_earnings():
-    """Generate Q2 FY26 earnings calendar with realistic dates"""
+def fetch_q2_fy25_earnings():
+    """Generate Q2 FY25 earnings calendar - Jul-Sep quarter results"""
     earnings_list = []
     
-    # Q2 FY26 is Oct-Dec 2025, results announced in Jan-Feb 2026
-    # Generate dates between Jan 10 and Feb 15, 2026
-    base_date = datetime(2026, 1, 10)
+    # Q2 FY25 is Jul-Sep 2024, results announced from Oct 10 onwards
+    # Current date is Nov 10, 2024, so we include dates from Oct 10 to Nov 30
     
-    for i, stock in enumerate(NIFTY_200_STOCKS):
-        # Distribute dates across Jan-Feb 2026
-        days_offset = (i * 2) % 37  # Spread across 37 days (Jan 10 - Feb 15)
+    # Companies reporting on Nov 11, 12, 13 (actual dates from prompt)
+    nov_11_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
+    nov_12_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
+    nov_13_companies = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"]
+    
+    # Add Nov 11 companies
+    for company in nov_11_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
+            'Expected Date': '11-Nov-2024',
+            'Day': 'Monday',
+            'Status': 'Scheduled'
+        })
+    
+    # Add Nov 12 companies
+    for company in nov_12_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
+            'Expected Date': '12-Nov-2024',
+            'Day': 'Tuesday',
+            'Status': 'Scheduled'
+        })
+    
+    # Add Nov 13 companies
+    for company in nov_13_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
+            'Expected Date': '13-Nov-2024',
+            'Day': 'Wednesday',
+            'Status': 'Scheduled'
+        })
+    
+    # Add remaining F&O companies across Oct-Nov
+    reported_companies = set(nov_11_companies + nov_12_companies + nov_13_companies)
+    remaining_companies = [c for c in FNO_STOCKS if c not in reported_companies]
+    
+    base_date = datetime(2024, 10, 10)
+    
+    for i, stock in enumerate(remaining_companies):
+        # Distribute across Oct 10 - Nov 30
+        days_offset = (i * 2) % 52  # Spread across 52 days
         result_date = base_date + timedelta(days=days_offset)
         
         # Skip weekends
-        while result_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+        while result_date.weekday() >= 5:
             result_date += timedelta(days=1)
+        
+        # Skip if already past Nov 30
+        if result_date > datetime(2024, 11, 30):
+            result_date = datetime(2024, 10, 10) + timedelta(days=(i % 10))
+            while result_date.weekday() >= 5:
+                result_date += timedelta(days=1)
         
         earnings_list.append({
             'Company': stock,
-            'Quarter': 'Q2 FY26 (Oct-Dec 2025)',
+            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
             'Expected Date': result_date.strftime('%d-%b-%Y'),
             'Day': result_date.strftime('%A'),
             'Status': 'Estimated'
@@ -424,21 +522,21 @@ def fetch_q2_fy26_earnings():
 # --------------------------
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
+tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q2 FY25 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
 
 # --------------------------
 # TAB 1: NEWS DASHBOARD
 # --------------------------
 with tab1:
-    st.title("📈 Nifty 200 News Dashboard (Last 48 Hours)")
-    st.markdown("*Real-time news about Nifty 200 stocks with sentiment analysis*")
-    st.markdown(f"**Showing news from last 2 days** | **{len(NIFTY_200_STOCKS)} stocks tracked**")
+    st.title("📈 F&O Stocks News Dashboard (Last 48 Hours)")
+    st.markdown("Real-time news about F&O stocks with sentiment analysis")
+    st.markdown(f"*Showing news from last 2 days* | *{len(FNO_STOCKS)} F&O stocks tracked*")
     st.markdown("---")
 
     col1, col2, col3 = st.columns([2, 2, 2])
 
     with col1:
-        stock_options = ["All Stocks"] + sorted(NIFTY_200_STOCKS)
+        stock_options = ["All Stocks"] + sorted(FNO_STOCKS)
         selected_stock = st.selectbox(
             "🔍 Filter by Stock",
             options=stock_options,
@@ -482,7 +580,7 @@ with tab1:
                     st.rerun()
 
     with col3:
-        if st.button("🗑️ Clear All", use_container_width=True):
+        if st.button("🗑 Clear All", use_container_width=True):
             st.session_state.news_articles = []
             st.success("✅ Cleared all news!")
             st.rerun()
@@ -555,7 +653,7 @@ with tab1:
                     "negative": "🔴"
                 }
                 
-                st.markdown(f"**[{article['Title']}]({article['Link']})**")
+                st.markdown(f"[{article['Title']}]({article['Link']})")
                 sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
                 st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
                 
@@ -573,52 +671,74 @@ with tab1:
             st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing!")
 
 # --------------------------
-# TAB 2: Q2 FY26 EARNINGS
+# TAB 2: Q2 FY25 EARNINGS
 # --------------------------
 with tab2:
-    st.title("📅 Q2 FY26 Earnings Calendar")
-    st.markdown("*Upcoming Q2 FY26 (Oct-Dec 2025) earnings announcements*")
-    st.markdown("📰 **Expected announcement period: January 2026**")
+    st.title("📅 Q2 FY25 Earnings Calendar")
+    st.markdown("Q2 FY25 (Jul-Sep 2024) earnings announcements for F&O stocks")
+    st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
     st.markdown("---")
     
     col1, col2 = st.columns([3, 3])
     
     with col1:
-        if st.button("🔄 Refresh Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
-            with st.spinner("Fetching Q2 FY26 earnings..."):
+        if st.button("🔄 Refresh Q2 FY25 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
+            with st.spinner("Fetching Q2 FY25 earnings..."):
                 st.cache_data.clear()
-                earnings = fetch_q2_fy26_earnings()
+                earnings = fetch_q2_fy25_earnings()
                 st.session_state.earnings_data = earnings
                 st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q2 FY26 results!")
+                st.success(f"✅ Loaded {len(earnings)} Q2 FY25 results!")
                 st.rerun()
     
     with col2:
         if st.session_state.last_earnings_fetch:
             time_ago = datetime.now() - st.session_state.last_earnings_fetch
             minutes_ago = int(time_ago.total_seconds() / 60)
-            st.info(f"⏱️ Last updated {minutes_ago} minutes ago")
+            st.info(f"⏱ Last updated {minutes_ago} minutes ago")
     
     if not st.session_state.earnings_data:
-        with st.spinner("Loading Q2 FY26 calendar..."):
-            earnings = fetch_q2_fy26_earnings()
+        with st.spinner("Loading Q2 FY25 calendar..."):
+            earnings = fetch_q2_fy25_earnings()
             st.session_state.earnings_data = earnings
             st.session_state.last_earnings_fetch = datetime.now()
     
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
-        st.subheader("📊 Q2 FY26 Overview")
-        col1, col2, col3 = st.columns(3)
+        st.subheader("📊 Q2 FY25 Overview")
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("Total Companies", len(df_earnings))
         with col2:
-            upcoming = len(df_earnings[df_earnings['Status'] == 'Upcoming'])
-            st.metric("Confirmed", upcoming)
+            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
+            st.metric("Scheduled (Nov 11-13)", scheduled)
         with col3:
             estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
             st.metric("Estimated", estimated)
+        with col4:
+            nov_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Nov')])
+            st.metric("November Results", nov_dates)
+        
+        st.markdown("---")
+        
+        # Highlight upcoming Nov 11-13 results
+        st.subheader("🔥 Upcoming This Week (Nov 11-13, 2024)")
+        upcoming_df = df_earnings[df_earnings['Expected Date'].isin(['11-Nov-2024', '12-Nov-2024', '13-Nov-2024'])]
+        if not upcoming_df.empty:
+            st.dataframe(
+                upcoming_df,
+                use_container_width=True,
+                height=300,
+                column_config={
+                    "Company": st.column_config.TextColumn("Company", width="medium"),
+                    "Quarter": st.column_config.TextColumn("Quarter", width="small"),
+                    "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                    "Day": st.column_config.TextColumn("Day", width="small"),
+                    "Status": st.column_config.TextColumn("Status", width="small")
+                }
+            )
         
         st.markdown("---")
         
@@ -640,28 +760,29 @@ with tab2:
                 "Company": st.column_config.TextColumn("Company", width="medium"),
                 "Quarter": st.column_config.TextColumn("Quarter", width="small"),
                 "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                "Day": st.column_config.TextColumn("Day", width="small"),
                 "Status": st.column_config.TextColumn("Status", width="small")
             }
         )
         
         csv_earnings = filtered_earnings.to_csv(index=False)
         st.download_button(
-            label="📥 Download Q2 FY26 Calendar (CSV)",
+            label="📥 Download Q2 FY25 Calendar (CSV)",
             data=csv_earnings,
-            file_name=f"q2_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            file_name=f"q2_fy25_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
         
-        st.info("💡 **Note**: Q2 FY26 covers Oct-Dec 2025. Results typically announced in January 2026.")
+        st.info("💡 *Note*: Q2 FY25 covers Jul-Sep 2024. Results announced in Oct-Nov 2024.")
     else:
-        st.info("👆 Click 'Refresh Q2 FY26 Calendar' to load upcoming results.")
+        st.info("👆 Click 'Refresh Q2 FY25 Calendar' to load upcoming results.")
 
 # --------------------------
 # TAB 3: TECHNICAL ANALYSIS
 # --------------------------
 with tab3:
     st.title("📈 Technical Analysis - Buy/Sell Signals")
-    st.markdown("*RSI, MACD, AO, and Bollinger Bands analysis for Nifty 200 stocks*")
+    st.markdown("RSI, MACD, and AO analysis for F&O stocks")
     st.markdown("---")
     
     col1, col2 = st.columns([3, 3])
@@ -681,7 +802,7 @@ with tab3:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            for idx, stock_name in enumerate(NIFTY_200_STOCKS[:num_stocks]):
+            for idx, stock_name in enumerate(FNO_STOCKS[:num_stocks]):
                 ticker = STOCK_TICKER_MAP.get(stock_name)
                 if not ticker:
                     continue
@@ -776,11 +897,11 @@ with tab3:
         )
         
         st.markdown("---")
-        st.caption("📊 **Indicators Used:** RSI (Relative Strength Index), MACD (Moving Average Convergence Divergence), AO (Awesome Oscillator), Bollinger Bands")
-        st.caption("⚠️ **Disclaimer:** This is for educational purposes only. Not financial advice. Always do your own research.")
+        st.caption("📊 **Indicators Used:** RSI (Relative Strength Index), MACD (Moving Average Convergence Divergence), AO (Awesome Oscillator)")
+        st.caption("⚠ **Disclaimer:** This is for educational purposes only. Not financial advice. Always do your own research.")
     
     else:
-        st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals for Nifty 200 stocks.")
+        st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals for F&O stocks.")
         
         st.markdown("---")
         st.subheader("📚 How It Works")
@@ -793,7 +914,6 @@ with tab3:
             - **RSI**: Identifies overbought (>70) and oversold (<30) conditions
             - **MACD**: Shows bullish/bearish momentum crossovers
             - **AO**: Awesome Oscillator for momentum confirmation
-            - **Bollinger Bands**: Identifies price extremes
             """)
         
         with col2:
@@ -811,7 +931,7 @@ with tab3:
 # --------------------------
 with tab4:
     st.title("💹 Stock Price Charts")
-    st.markdown("*Candlestick charts with technical indicators*")
+    st.markdown("Candlestick charts with SMA/EMA and technical indicators")
     st.markdown("---")
     
     col1, col2 = st.columns([2, 2])
@@ -819,7 +939,7 @@ with tab4:
     with col1:
         selected_chart_stock = st.selectbox(
             "📊 Select Stock",
-            options=sorted(NIFTY_200_STOCKS),
+            options=sorted(FNO_STOCKS),
             key="chart_stock"
         )
     
@@ -838,12 +958,15 @@ with tab4:
             stock = yf.Ticker(ticker)
             df = stock.history(period=period)
             
-            if not df.empty:
+            if not df.empty and len(df) > 0:
                 # Calculate indicators
                 df['RSI'] = calculate_rsi(df['Close'])
                 df['MACD'], df['Signal'] = calculate_macd(df['Close'])
                 df['AO'] = calculate_ao(df['High'], df['Low'])
-                df['BB_Upper'], df['BB_Middle'], df['BB_Lower'] = calculate_bollinger_bands(df['Close'])
+                df['SMA_20'] = calculate_sma(df['Close'], 20)
+                df['SMA_50'] = calculate_sma(df['Close'], 50)
+                df['EMA_20'] = calculate_ema(df['Close'], 20)
+                df['EMA_50'] = calculate_ema(df['Close'], 50)
                 
                 # Current metrics
                 current_price = df['Close'].iloc[-1]
@@ -863,7 +986,7 @@ with tab4:
                 
                 st.markdown("---")
                 
-                # Candlestick Chart
+                # Candlestick Chart (without Bollinger Bands)
                 fig = go.Figure(data=[go.Candlestick(
                     x=df.index,
                     open=df['Open'],
@@ -873,22 +996,35 @@ with tab4:
                     name='Price'
                 )])
                 
-                # Add Bollinger Bands
-                fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper',
-                                        line=dict(color='rgba(250, 128, 114, 0.5)', dash='dash')))
-                fig.add_trace(go.Scatter(x=df.index, y=df['BB_Middle'], name='BB Middle',
-                                        line=dict(color='rgba(128, 128, 128, 0.5)', dash='dot')))
-                fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower',
-                                        line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash')))
-                
                 fig.update_layout(
-                    title=f"{selected_chart_stock} - Price Chart with Bollinger Bands",
+                    title=f"{selected_chart_stock} - Price Chart",
                     xaxis_title="Date",
                     yaxis_title="Price (₹)",
                     height=500,
                     xaxis_rangeslider_visible=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # SMA/EMA Chart
+                fig_ma = go.Figure()
+                fig_ma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_ma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
+                                           line=dict(color='orange', dash='solid')))
+                fig_ma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
+                                           line=dict(color='red', dash='solid')))
+                fig_ma.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
+                                           line=dict(color='green', dash='dash')))
+                fig_ma.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
+                                           line=dict(color='purple', dash='dash')))
+                
+                fig_ma.update_layout(
+                    title="Moving Averages (SMA & EMA)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_ma, use_container_width=True)
                 
                 # RSI Chart
                 fig_rsi = go.Figure()
@@ -928,17 +1064,21 @@ with tab4:
                 st.plotly_chart(fig_ao, use_container_width=True)
                 
             else:
-                st.error("No data available for this stock.")
+                st.error(f"No data available for {selected_chart_stock}. The ticker might be incorrect or data is unavailable.")
+                st.info(f"Ticker used: {ticker}")
         
         except Exception as e:
-            st.error(f"Error loading chart: {str(e)}")
+            st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
+            st.info(f"Ticker attempted: {ticker}")
+            st.warning("This stock might not have available data on Yahoo Finance. Try another stock.")
     else:
-        st.warning("Ticker symbol not found for this stock.")
+        st.warning(f"Ticker symbol not found for {selected_chart_stock}. Please check the stock name.")
 
 # --------------------------
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard shows news, Q2 FY26 earnings, technical analysis, and price charts for Nifty 200 stocks")
-st.caption("📊 Technical indicators: RSI, MACD, AO, Bollinger Bands | Data updates in real-time")
-st.caption("⚠️ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
+st.caption("💡 Dashboard shows news, Q2 FY25 earnings, technical analysis, and price charts for F&O stocks")
+st.caption("📊 Technical indicators: RSI, MACD, AO, SMA, EMA | Data updates in real-time")
+st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
+st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
