@@ -1424,5 +1424,3 @@ st.caption("💡 Dashboard shows news, Q2/Q3 FY26 earnings, technical analysis, 
 st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
 st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
 st.caption("📅 FY26 = April 1, 2025 - March 31, 2026")
-st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
-
