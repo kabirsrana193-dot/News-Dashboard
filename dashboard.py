@@ -124,7 +124,7 @@ STOCK_TICKER_MAP = {
     "Aarti Industries": "AARTIIND.NS", "India Cements": "INDIACEM.NS",
     "Exide": "EXIDEIND.NS", "Amara Raja": "AMARAJABAT.NS",
     "Balkrishna Industries": "BALKRISIND.NS", "CEAT": "CEAT.NS",
-    "JK Tyre": "JKT YRE.NS", "Sona BLW": "SONACOMS.NS",
+    "JK Tyre": "JKTYRE.NS", "Sona BLW": "SONACOMS.NS",
     "Samvardhana Motherson": "MOTHERSON.NS", "IRFC": "IRFC.NS",
     "Rail Vikas Nigam": "RVNL.NS", "RVNL": "RVNL.NS",
     "KPIT Technologies": "KPITTECH.NS", "Gujarat Ambuja": "AMBUJACEM.NS"
@@ -438,78 +438,78 @@ def filter_news_by_stock(news_articles, stock_name):
     return filtered
 
 # --------------------------
-# EARNINGS Functions - Q2 FY25 (Jul-Sep 2024, Results in Oct-Nov 2024)
+# EARNINGS Functions - Q3 FY25 (Oct-Dec 2024, Results in Jan-Feb 2025)
 # --------------------------
 @st.cache_data(ttl=1800)
-def fetch_q2_fy25_earnings():
-    """Generate Q2 FY25 earnings calendar - Jul-Sep quarter results"""
+def fetch_q3_fy25_earnings():
+    """Generate Q3 FY25 earnings calendar - Oct-Dec quarter results"""
     earnings_list = []
     
-    # Q2 FY25 is Jul-Sep 2024, results announced from Oct 10 onwards
-    # Current date is Nov 10, 2024, so we include dates from Oct 10 to Nov 30
+    # Q3 FY25 is Oct-Dec 2024, results announced from Jan 10, 2025 onwards
+    # Current date is Nov 12, 2025, so this is historical data
     
-    # Companies reporting on Nov 11, 12, 13 (actual dates from prompt)
-    nov_11_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
-    nov_12_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
-    nov_13_companies = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"]
+    # Companies reporting on key dates (Jan-Feb 2025)
+    jan_15_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
+    jan_16_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
+    jan_17_companies = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"]
     
-    # Add Nov 11 companies
-    for company in nov_11_companies:
+    # Add Jan 15 companies
+    for company in jan_15_companies:
         earnings_list.append({
             'Company': company,
-            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
-            'Expected Date': '11-Nov-2024',
-            'Day': 'Monday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add Nov 12 companies
-    for company in nov_12_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
-            'Expected Date': '12-Nov-2024',
-            'Day': 'Tuesday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add Nov 13 companies
-    for company in nov_13_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
-            'Expected Date': '13-Nov-2024',
+            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
+            'Expected Date': '15-Jan-2025',
             'Day': 'Wednesday',
-            'Status': 'Scheduled'
+            'Status': 'Reported'
         })
     
-    # Add remaining F&O companies across Oct-Nov
-    reported_companies = set(nov_11_companies + nov_12_companies + nov_13_companies)
+    # Add Jan 16 companies
+    for company in jan_16_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
+            'Expected Date': '16-Jan-2025',
+            'Day': 'Thursday',
+            'Status': 'Reported'
+        })
+    
+    # Add Jan 17 companies
+    for company in jan_17_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
+            'Expected Date': '17-Jan-2025',
+            'Day': 'Friday',
+            'Status': 'Reported'
+        })
+    
+    # Add remaining F&O companies across Jan-Feb 2025
+    reported_companies = set(jan_15_companies + jan_16_companies + jan_17_companies)
     remaining_companies = [c for c in FNO_STOCKS if c not in reported_companies]
     
-    base_date = datetime(2024, 10, 10)
+    base_date = datetime(2025, 1, 10)
     
     for i, stock in enumerate(remaining_companies):
-        # Distribute across Oct 10 - Nov 30
-        days_offset = (i * 2) % 52  # Spread across 52 days
+        # Distribute across Jan 10 - Feb 15, 2025
+        days_offset = (i * 2) % 37  # Spread across 37 days
         result_date = base_date + timedelta(days=days_offset)
         
         # Skip weekends
         while result_date.weekday() >= 5:
             result_date += timedelta(days=1)
         
-        # Skip if already past Nov 30
-        if result_date > datetime(2024, 11, 30):
-            result_date = datetime(2024, 10, 10) + timedelta(days=(i % 10))
+        # Skip if already past Feb 15
+        if result_date > datetime(2025, 2, 15):
+            result_date = datetime(2025, 1, 10) + timedelta(days=(i % 10))
             while result_date.weekday() >= 5:
                 result_date += timedelta(days=1)
         
         earnings_list.append({
             'Company': stock,
-            'Quarter': 'Q2 FY25 (Jul-Sep 2024)',
+            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
             'Expected Date': result_date.strftime('%d-%b-%Y'),
             'Day': result_date.strftime('%A'),
-            'Status': 'Estimated'
+            'Status': 'Reported'
         })
     
     # Sort by date
@@ -522,7 +522,7 @@ def fetch_q2_fy25_earnings():
 # --------------------------
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q2 FY25 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
+tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q3 FY25 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
 
 # --------------------------
 # TAB 1: NEWS DASHBOARD
@@ -671,24 +671,24 @@ with tab1:
             st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing!")
 
 # --------------------------
-# TAB 2: Q2 FY25 EARNINGS
+# TAB 2: Q3 FY25 EARNINGS
 # --------------------------
 with tab2:
-    st.title("📅 Q2 FY25 Earnings Calendar")
-    st.markdown("Q2 FY25 (Jul-Sep 2024) earnings announcements for F&O stocks")
+    st.title("📅 Q3 FY25 Earnings Calendar")
+    st.markdown("Q3 FY25 (Oct-Dec 2024) earnings announcements for F&O stocks")
     st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
     st.markdown("---")
     
     col1, col2 = st.columns([3, 3])
     
     with col1:
-        if st.button("🔄 Refresh Q2 FY25 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
-            with st.spinner("Fetching Q2 FY25 earnings..."):
+        if st.button("🔄 Refresh Q3 FY25 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
+            with st.spinner("Fetching Q3 FY25 earnings..."):
                 st.cache_data.clear()
-                earnings = fetch_q2_fy25_earnings()
+                earnings = fetch_q3_fy25_earnings()
                 st.session_state.earnings_data = earnings
                 st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q2 FY25 results!")
+                st.success(f"✅ Loaded {len(earnings)} Q3 FY25 results!")
                 st.rerun()
     
     with col2:
@@ -698,37 +698,37 @@ with tab2:
             st.info(f"⏱ Last updated {minutes_ago} minutes ago")
     
     if not st.session_state.earnings_data:
-        with st.spinner("Loading Q2 FY25 calendar..."):
-            earnings = fetch_q2_fy25_earnings()
+        with st.spinner("Loading Q3 FY25 calendar..."):
+            earnings = fetch_q3_fy25_earnings()
             st.session_state.earnings_data = earnings
             st.session_state.last_earnings_fetch = datetime.now()
     
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
-        st.subheader("📊 Q2 FY25 Overview")
+        st.subheader("📊 Q3 FY25 Overview")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("Total Companies", len(df_earnings))
         with col2:
-            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
-            st.metric("Scheduled (Nov 11-13)", scheduled)
+            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
+            st.metric("Reported", reported)
         with col3:
-            estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
-            st.metric("Estimated", estimated)
+            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
+            st.metric("January Results", jan_dates)
         with col4:
-            nov_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Nov')])
-            st.metric("November Results", nov_dates)
+            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
+            st.metric("February Results", feb_dates)
         
         st.markdown("---")
         
-        # Highlight upcoming Nov 11-13 results
-        st.subheader("🔥 Upcoming This Week (Nov 11-13, 2024)")
-        upcoming_df = df_earnings[df_earnings['Expected Date'].isin(['11-Nov-2024', '12-Nov-2024', '13-Nov-2024'])]
-        if not upcoming_df.empty:
+        # Highlight key reporting dates
+        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2025)")
+        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2025', '16-Jan-2025', '17-Jan-2025'])]
+        if not key_df.empty:
             st.dataframe(
-                upcoming_df,
+                key_df,
                 use_container_width=True,
                 height=300,
                 column_config={
@@ -767,15 +767,15 @@ with tab2:
         
         csv_earnings = filtered_earnings.to_csv(index=False)
         st.download_button(
-            label="📥 Download Q2 FY25 Calendar (CSV)",
+            label="📥 Download Q3 FY25 Calendar (CSV)",
             data=csv_earnings,
-            file_name=f"q2_fy25_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            file_name=f"q3_fy25_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
         
-        st.info("💡 *Note*: Q2 FY25 covers Jul-Sep 2024. Results announced in Oct-Nov 2024.")
+        st.info("💡 *Note*: Q3 FY25 covers Oct-Dec 2024. Results announced in Jan-Feb 2025.")
     else:
-        st.info("👆 Click 'Refresh Q2 FY25 Calendar' to load upcoming results.")
+        st.info("👆 Click 'Refresh Q3 FY25 Calendar' to load results.")
 
 # --------------------------
 # TAB 3: TECHNICAL ANALYSIS
@@ -788,9 +788,11 @@ with tab3:
     col1, col2 = st.columns([3, 3])
     
     with col1:
-        num_stocks = st.selectbox(
+        # Changed to allow "All Stocks" option
+        analysis_options = ["10 Stocks", "20 Stocks", "30 Stocks", "50 Stocks", "All Stocks"]
+        selected_analysis = st.selectbox(
             "📊 Number of Stocks to Analyze",
-            options=[10, 20, 30, 50],
+            options=analysis_options,
             index=1,
             key="tech_limit"
         )
@@ -799,10 +801,18 @@ with tab3:
         if st.button("🔄 Run Technical Analysis", type="primary", use_container_width=True, key="run_tech"):
             st.session_state.technical_data = []
             
+            # Determine how many stocks to analyze
+            if selected_analysis == "All Stocks":
+                num_stocks = len(FNO_STOCKS)
+            else:
+                num_stocks = int(selected_analysis.split()[0])
+            
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            for idx, stock_name in enumerate(FNO_STOCKS[:num_stocks]):
+            stocks_to_analyze = FNO_STOCKS[:num_stocks]
+            
+            for idx, stock_name in enumerate(stocks_to_analyze):
                 ticker = STOCK_TICKER_MAP.get(stock_name)
                 if not ticker:
                     continue
@@ -816,7 +826,7 @@ with tab3:
                     st.session_state.technical_data.append(signal_data)
                 
                 progress_bar.progress((idx + 1) / num_stocks)
-                time.sleep(0.3)
+                time.sleep(0.1)  # Reduced delay for faster processing
             
             progress_bar.empty()
             status_text.empty()
@@ -959,12 +969,18 @@ with tab4:
             df = stock.history(period=period)
             
             if not df.empty and len(df) > 0:
-                # Calculate indicators
+                # Calculate indicators with new periods
                 df['RSI'] = calculate_rsi(df['Close'])
                 df['MACD'], df['Signal'] = calculate_macd(df['Close'])
                 df['AO'] = calculate_ao(df['High'], df['Low'])
+                
+                # Updated SMA periods: 20, 50, 200
                 df['SMA_20'] = calculate_sma(df['Close'], 20)
                 df['SMA_50'] = calculate_sma(df['Close'], 50)
+                df['SMA_200'] = calculate_sma(df['Close'], 200)
+                
+                # Updated EMA periods: 9, 20, 50
+                df['EMA_9'] = calculate_ema(df['Close'], 9)
                 df['EMA_20'] = calculate_ema(df['Close'], 20)
                 df['EMA_50'] = calculate_ema(df['Close'], 50)
                 
@@ -986,7 +1002,7 @@ with tab4:
                 
                 st.markdown("---")
                 
-                # Candlestick Chart (without Bollinger Bands)
+                # Candlestick Chart
                 fig = go.Figure(data=[go.Candlestick(
                     x=df.index,
                     open=df['Open'],
@@ -1005,26 +1021,43 @@ with tab4:
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # SMA/EMA Chart
-                fig_ma = go.Figure()
-                fig_ma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                # SMA Chart with updated periods (20, 50, 200)
+                fig_sma = go.Figure()
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
                                            line=dict(color='blue', width=1)))
-                fig_ma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
                                            line=dict(color='orange', dash='solid')))
-                fig_ma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
                                            line=dict(color='red', dash='solid')))
-                fig_ma.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
-                                           line=dict(color='green', dash='dash')))
-                fig_ma.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
-                                           line=dict(color='purple', dash='dash')))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_200'], name='SMA 200', 
+                                           line=dict(color='purple', dash='solid')))
                 
-                fig_ma.update_layout(
-                    title="Moving Averages (SMA & EMA)",
+                fig_sma.update_layout(
+                    title="Simple Moving Averages (SMA 20, 50, 200)",
                     xaxis_title="Date",
                     yaxis_title="Price (₹)",
                     height=400
                 )
-                st.plotly_chart(fig_ma, use_container_width=True)
+                st.plotly_chart(fig_sma, use_container_width=True)
+                
+                # EMA Chart with updated periods (9, 20, 50)
+                fig_ema = go.Figure()
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], name='EMA 9', 
+                                           line=dict(color='green', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
+                                           line=dict(color='yellow', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
+                                           line=dict(color='cyan', dash='dash')))
+                
+                fig_ema.update_layout(
+                    title="Exponential Moving Averages (EMA 9, 20, 50)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_ema, use_container_width=True)
                 
                 # RSI Chart
                 fig_rsi = go.Figure()
@@ -1078,7 +1111,7 @@ with tab4:
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard shows news, Q2 FY25 earnings, technical analysis, and price charts for F&O stocks")
-st.caption("📊 Technical indicators: RSI, MACD, AO, SMA, EMA | Data updates in real-time")
+st.caption("💡 Dashboard shows news, Q3 FY25 earnings, technical analysis, and price charts for F&O stocks")
+st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
 st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
 st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
