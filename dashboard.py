@@ -157,6 +157,14 @@ if 'last_earnings_fetch' not in st.session_state:
     st.session_state.last_earnings_fetch = None
 if 'technical_data' not in st.session_state:
     st.session_state.technical_data = []
+if 'watchlist_stocks' not in st.session_state:
+    # Default watchlist - top 16 F&O stocks
+    st.session_state.watchlist_stocks = [
+        "Reliance", "TCS", "HDFC Bank", "Infosys", 
+        "ICICI Bank", "Bharti Airtel", "ITC", "SBI",
+        "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank", "Axis Bank",
+        "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"
+    ]
 
 # --------------------------
 # Technical Analysis Functions
@@ -603,7 +611,7 @@ def fetch_q3_fy26_earnings():
 # --------------------------
 
 # Main tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📅 Q3 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📅 Q3 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts", "📊 Live Multi-Chart"])
 
 # --------------------------
 # TAB 1: NEWS DASHBOARD
@@ -745,12 +753,6 @@ with tab1:
                 st.caption(f"Source: {article['Source']} | {article.get('Published', 'Recent')}")
                 st.markdown("---")
 
-    else:
-        if st.session_state.selected_stock == "All Stocks":
-            st.info("👆 Click 'Refresh News' to load content from the last 48 hours.")
-        else:
-            st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing!")
-
 # --------------------------
 # TAB 2: Q2 FY26 EARNINGS
 # --------------------------
@@ -855,10 +857,6 @@ with tab2:
             key="download_q2"
         )
         
-        st.info("💡 *Note*: Q2 FY26 covers Jul-Sep 2025. Results announced in Oct-Nov 2025.")
-    else:
-        st.info("👆 Click 'Refresh Q2 FY26 Calendar' to load upcoming results.")
-
 # --------------------------
 # TAB 3: Q3 FY26 EARNINGS
 # --------------------------
@@ -963,10 +961,6 @@ with tab3:
             key="download_q3"
         )
         
-        st.info("💡 *Note*: Q3 FY26 covers Oct-Dec 2025. Results will be announced in Jan-Feb 2026.")
-    else:
-        st.info("👆 Click 'Refresh Q3 FY26 Calendar' to load results.")
-
 # --------------------------
 # TAB 4: TECHNICAL ANALYSIS
 # --------------------------
@@ -1123,9 +1117,6 @@ with tab4:
             - **Buy**: Score 1-2 (Some bullish signals)
             - **Hold**: Score 0 (Neutral)
             - **Sell**: Score -1 to -2 (Some bearish signals)
-            - **Strong Sell**: Score ≤ -3 (Multiple bearish indicators)
-            """)
-
 # --------------------------
 # TAB 5: STOCK CHARTS
 # --------------------------
@@ -1294,8 +1285,136 @@ with tab5:
             st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
             st.info(f"Ticker attempted: {ticker}")
             st.warning("This stock might not have available data on Yahoo Finance. Try another stock.")
+# --------------------------
+# TAB 6: LIVE MULTI-CHART (4x4 GRID)
+# --------------------------
+with tab6:
+    st.title("📊 Live Multi-Chart Dashboard")
+    st.markdown("Monitor up to 16 stocks simultaneously with live intraday charts")
+    st.markdown("---")
+    
+    # Controls
+    col1, col2, col3 = st.columns([3, 2, 1])
+    
+    with col1:
+        st.markdown("**📋 Manage Your Watchlist (16 stocks max)**")
+        
+        # Multi-select for watchlist
+        selected_watchlist = st.multiselect(
+            "Select stocks to monitor",
+            options=sorted(FNO_STOCKS),
+            default=st.session_state.watchlist_stocks[:16],
+            max_selections=16,
+            key="watchlist_selector"
+        )
+        
+        if selected_watchlist != st.session_state.watchlist_stocks:
+            st.session_state.watchlist_stocks = selected_watchlist
+    
+    with col2:
+        chart_period_multi = st.selectbox(
+            "📅 Intraday Period",
+            options=["1d", "5d"],
+            index=0,
+            key="multi_chart_period"
+        )
+        
+        chart_interval = st.selectbox(
+            "⏱ Interval",
+            options=["1m", "5m", "15m", "30m", "60m"],
+            index=2,
+            key="multi_chart_interval"
+        )
+    
+    with col3:
+        if st.button("🔄 Refresh All", type="primary", use_container_width=True):
+            st.rerun()
+        
+        st.caption(f"**{len(selected_watchlist)}/16** stocks")
+    
+    st.markdown("---")
+    
+    if not selected_watchlist:
+        st.info("👆 Select stocks from the dropdown to start monitoring")
     else:
-        st.warning(f"Ticker symbol not found for {selected_chart_stock}. Please check the stock name.")
+        # Calculate grid layout
+        num_stocks = len(selected_watchlist)
+        
+        # Create 4x4 grid
+        for row in range(4):
+            cols = st.columns(4)
+            for col_idx, col in enumerate(cols):
+                stock_idx = row * 4 + col_idx
+                
+                if stock_idx < num_stocks:
+                    stock_name = selected_watchlist[stock_idx]
+                    ticker = STOCK_TICKER_MAP.get(stock_name)
+                    
+                    with col:
+                        try:
+                            stock = yf.Ticker(ticker)
+                            df = stock.history(period=chart_period_multi, interval=chart_interval)
+                            
+                            if not df.empty and len(df) > 0:
+                                # Calculate metrics
+                                current_price = df['Close'].iloc[-1]
+                                prev_price = df['Close'].iloc[0]
+                                price_change = current_price - prev_price
+                                price_change_pct = (price_change / prev_price) * 100
+                                
+                                # Color based on change
+                                if price_change >= 0:
+                                    color = "green"
+                                    arrow = "🟢"
+                                else:
+                                    color = "red"
+                                    arrow = "🔴"
+                                
+                                # Mini card
+                                st.markdown(f"**{arrow} {stock_name}**")
+                                st.metric(
+                                    label="Price",
+                                    value=f"₹{current_price:.2f}",
+                                    delta=f"{price_change_pct:.2f}%"
+                                )
+                                
+                                # Mini chart
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Scatter(
+                                    x=df.index,
+                                    y=df['Close'],
+                                    mode='lines',
+                                    line=dict(color=color, width=2),
+                                    fill='tozeroy',
+                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)'
+                                ))
+                                
+                                fig_mini.update_layout(
+                                    height=200,
+                                    margin=dict(l=0, r=0, t=0, b=0),
+                                    xaxis=dict(showgrid=False, showticklabels=False),
+                                    yaxis=dict(showgrid=False, showticklabels=True),
+                                    showlegend=False,
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)'
+                                )
+                                
+                                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+                                
+                                # Quick stats
+                                st.caption(f"H: ₹{df['High'].max():.2f} | L: ₹{df['Low'].min():.2f}")
+                            
+                            else:
+                                st.warning(f"No data for {stock_name}")
+                        
+                        except Exception as e:
+                            st.error(f"{stock_name}: Error")
+                            st.caption(str(e)[:50])
+        
+        st.markdown("---")
+        st.caption("💡 **Tip:** Charts auto-update when you click 'Refresh All'. Add/remove stocks using the dropdown above.")
+        st.caption("📊 **Live Data:** Intraday charts show real-time price movements during market hours")
+        st.caption("⚠ **Note:** Data updates are subject to Yahoo Finance availability and delays")
 
 # --------------------------
 # FOOTER
