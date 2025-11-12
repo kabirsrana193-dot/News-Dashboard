@@ -1117,6 +1117,8 @@ with tab4:
             - **Buy**: Score 1-2 (Some bullish signals)
             - **Hold**: Score 0 (Neutral)
             - **Sell**: Score -1 to -2 (Some bearish signals)
+            """)
+            
 # --------------------------
 # TAB 5: STOCK CHARTS
 # --------------------------
