@@ -438,17 +438,99 @@ def filter_news_by_stock(news_articles, stock_name):
     return filtered
 
 # --------------------------
-# EARNINGS Functions - Q3 FY25 (Oct-Dec 2024, Results in Jan-Feb 2025)
+# EARNINGS Functions - Q2 FY26 (Jul-Sep 2025, Results in Oct-Nov 2025)
 # --------------------------
 @st.cache_data(ttl=1800)
-def fetch_q3_fy25_earnings():
-    """Generate Q3 FY25 earnings calendar - Oct-Dec quarter results"""
+def fetch_q2_fy26_earnings():
+    """Generate Q2 FY26 earnings calendar - Jul-Sep 2025 quarter results"""
     earnings_list = []
     
-    # Q3 FY25 is Oct-Dec 2024, results announced from Jan 10, 2025 onwards
-    # Current date is Nov 12, 2025, so this is historical data
+    # Current date: Nov 12, 2025
+    # FY26 = April 1, 2025 - March 31, 2026
+    # Q2 FY26 = Jul-Sep 2025, results announced in Oct-Nov 2025
     
-    # Companies reporting on key dates (Jan-Feb 2025)
+    # Companies reporting on Nov 13-14, 2025 (upcoming)
+    nov_13_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
+    nov_14_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
+    
+    # Add Nov 13 companies
+    for company in nov_13_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
+            'Expected Date': '13-Nov-2025',
+            'Day': 'Thursday',
+            'Status': 'Scheduled'
+        })
+    
+    # Add Nov 14 companies
+    for company in nov_14_companies:
+        earnings_list.append({
+            'Company': company,
+            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
+            'Expected Date': '14-Nov-2025',
+            'Day': 'Friday',
+            'Status': 'Scheduled'
+        })
+    
+    # Add some companies that already reported (Oct 10 - Nov 12)
+    early_reporters = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan",
+                       "Sun Pharma", "HCL Tech", "Nestle", "Adani Enterprises", "Tata Motors"]
+    
+    base_date_past = datetime(2025, 10, 10)
+    for i, company in enumerate(early_reporters):
+        days_offset = (i * 3) % 30
+        result_date = base_date_past + timedelta(days=days_offset)
+        
+        # Skip weekends
+        while result_date.weekday() >= 5:
+            result_date += timedelta(days=1)
+        
+        # Only add if before Nov 13
+        if result_date < datetime(2025, 11, 13):
+            earnings_list.append({
+                'Company': company,
+                'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
+                'Expected Date': result_date.strftime('%d-%b-%Y'),
+                'Day': result_date.strftime('%A'),
+                'Status': 'Reported'
+            })
+    
+    # Add remaining F&O companies (scheduled for Nov 15 onwards)
+    reported_companies = set(nov_13_companies + nov_14_companies + early_reporters)
+    remaining_companies = [c for c in FNO_STOCKS if c not in reported_companies]
+    
+    base_date_future = datetime(2025, 11, 15)
+    
+    for i, stock in enumerate(remaining_companies):
+        days_offset = (i * 2) % 20  # Spread across ~20 days
+        result_date = base_date_future + timedelta(days=days_offset)
+        
+        # Skip weekends
+        while result_date.weekday() >= 5:
+            result_date += timedelta(days=1)
+        
+        earnings_list.append({
+            'Company': stock,
+            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
+            'Expected Date': result_date.strftime('%d-%b-%Y'),
+            'Day': result_date.strftime('%A'),
+            'Status': 'Estimated'
+        })
+    
+    # Sort by date
+    earnings_list.sort(key=lambda x: datetime.strptime(x['Expected Date'], '%d-%b-%Y'))
+    
+    return earnings_list
+
+@st.cache_data(ttl=1800)
+def fetch_q3_fy26_earnings():
+    """Generate Q3 FY26 earnings calendar - Oct-Dec 2025 quarter results"""
+    earnings_list = []
+    
+    # Q3 FY26 = Oct-Dec 2025, results will be announced in Jan-Feb 2026
+    
+    # Key reporting dates in January 2026
     jan_15_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
     jan_16_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
     jan_17_companies = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"]
@@ -457,40 +539,39 @@ def fetch_q3_fy25_earnings():
     for company in jan_15_companies:
         earnings_list.append({
             'Company': company,
-            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
-            'Expected Date': '15-Jan-2025',
-            'Day': 'Wednesday',
-            'Status': 'Reported'
+            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
+            'Expected Date': '15-Jan-2026',
+            'Day': 'Thursday',
+            'Status': 'Scheduled'
         })
     
     # Add Jan 16 companies
     for company in jan_16_companies:
         earnings_list.append({
             'Company': company,
-            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
-            'Expected Date': '16-Jan-2025',
-            'Day': 'Thursday',
-            'Status': 'Reported'
+            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
+            'Expected Date': '16-Jan-2026',
+            'Day': 'Friday',
+            'Status': 'Scheduled'
         })
     
     # Add Jan 17 companies
     for company in jan_17_companies:
         earnings_list.append({
             'Company': company,
-            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
-            'Expected Date': '17-Jan-2025',
-            'Day': 'Friday',
-            'Status': 'Reported'
+            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
+            'Expected Date': '17-Jan-2026',
+            'Day': 'Saturday',
+            'Status': 'Scheduled'
         })
     
-    # Add remaining F&O companies across Jan-Feb 2025
-    reported_companies = set(jan_15_companies + jan_16_companies + jan_17_companies)
-    remaining_companies = [c for c in FNO_STOCKS if c not in reported_companies]
+    # Add remaining F&O companies across Jan-Feb 2026
+    scheduled_companies = set(jan_15_companies + jan_16_companies + jan_17_companies)
+    remaining_companies = [c for c in FNO_STOCKS if c not in scheduled_companies]
     
-    base_date = datetime(2025, 1, 10)
+    base_date = datetime(2026, 1, 10)
     
     for i, stock in enumerate(remaining_companies):
-        # Distribute across Jan 10 - Feb 15, 2025
         days_offset = (i * 2) % 37  # Spread across 37 days
         result_date = base_date + timedelta(days=days_offset)
         
@@ -498,18 +579,18 @@ def fetch_q3_fy25_earnings():
         while result_date.weekday() >= 5:
             result_date += timedelta(days=1)
         
-        # Skip if already past Feb 15
-        if result_date > datetime(2025, 2, 15):
-            result_date = datetime(2025, 1, 10) + timedelta(days=(i % 10))
+        # Keep within Jan-Feb 2026
+        if result_date > datetime(2026, 2, 28):
+            result_date = datetime(2026, 1, 20) + timedelta(days=(i % 15))
             while result_date.weekday() >= 5:
                 result_date += timedelta(days=1)
         
         earnings_list.append({
             'Company': stock,
-            'Quarter': 'Q3 FY25 (Oct-Dec 2024)',
+            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
             'Expected Date': result_date.strftime('%d-%b-%Y'),
             'Day': result_date.strftime('%A'),
-            'Status': 'Reported'
+            'Status': 'Estimated'
         })
     
     # Sort by date
@@ -522,7 +603,7 @@ def fetch_q3_fy25_earnings():
 # --------------------------
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q3 FY25 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📅 Q3 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
 
 # --------------------------
 # TAB 1: NEWS DASHBOARD
@@ -671,24 +752,24 @@ with tab1:
             st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing!")
 
 # --------------------------
-# TAB 2: Q3 FY25 EARNINGS
+# TAB 2: Q2 FY26 EARNINGS
 # --------------------------
 with tab2:
-    st.title("📅 Q3 FY25 Earnings Calendar")
-    st.markdown("Q3 FY25 (Oct-Dec 2024) earnings announcements for F&O stocks")
+    st.title("📅 Q2 FY26 Earnings Calendar")
+    st.markdown("Q2 FY26 (Jul-Sep 2025) earnings announcements for F&O stocks")
     st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
     st.markdown("---")
     
     col1, col2 = st.columns([3, 3])
     
     with col1:
-        if st.button("🔄 Refresh Q3 FY25 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
-            with st.spinner("Fetching Q3 FY25 earnings..."):
+        if st.button("🔄 Refresh Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q2"):
+            with st.spinner("Fetching Q2 FY26 earnings..."):
                 st.cache_data.clear()
-                earnings = fetch_q3_fy25_earnings()
+                earnings = fetch_q2_fy26_earnings()
                 st.session_state.earnings_data = earnings
                 st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q3 FY25 results!")
+                st.success(f"✅ Loaded {len(earnings)} Q2 FY26 results!")
                 st.rerun()
     
     with col2:
@@ -698,37 +779,37 @@ with tab2:
             st.info(f"⏱ Last updated {minutes_ago} minutes ago")
     
     if not st.session_state.earnings_data:
-        with st.spinner("Loading Q3 FY25 calendar..."):
-            earnings = fetch_q3_fy25_earnings()
+        with st.spinner("Loading Q2 FY26 calendar..."):
+            earnings = fetch_q2_fy26_earnings()
             st.session_state.earnings_data = earnings
             st.session_state.last_earnings_fetch = datetime.now()
     
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
-        st.subheader("📊 Q3 FY25 Overview")
+        st.subheader("📊 Q2 FY26 Overview")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("Total Companies", len(df_earnings))
         with col2:
-            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
-            st.metric("Reported", reported)
+            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
+            st.metric("Upcoming", scheduled)
         with col3:
-            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
-            st.metric("January Results", jan_dates)
+            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
+            st.metric("Already Reported", reported)
         with col4:
-            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
-            st.metric("February Results", feb_dates)
+            estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
+            st.metric("Estimated", estimated)
         
         st.markdown("---")
         
-        # Highlight key reporting dates
-        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2025)")
-        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2025', '16-Jan-2025', '17-Jan-2025'])]
-        if not key_df.empty:
+        # Highlight upcoming Nov 13-14 results
+        st.subheader("🔥 Upcoming This Week (Nov 13-14, 2025)")
+        upcoming_df = df_earnings[df_earnings['Expected Date'].isin(['13-Nov-2025', '14-Nov-2025'])]
+        if not upcoming_df.empty:
             st.dataframe(
-                key_df,
+                upcoming_df,
                 use_container_width=True,
                 height=300,
                 column_config={
@@ -742,7 +823,7 @@ with tab2:
         
         st.markdown("---")
         
-        search_earnings = st.text_input("🔍 Search by Company Name", "")
+        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q2")
         
         if search_earnings:
             mask = df_earnings['Company'].str.contains(search_earnings, case=False)
@@ -767,20 +848,129 @@ with tab2:
         
         csv_earnings = filtered_earnings.to_csv(index=False)
         st.download_button(
-            label="📥 Download Q3 FY25 Calendar (CSV)",
+            label="📥 Download Q2 FY26 Calendar (CSV)",
             data=csv_earnings,
-            file_name=f"q3_fy25_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
+            file_name=f"q2_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="download_q2"
         )
         
-        st.info("💡 *Note*: Q3 FY25 covers Oct-Dec 2024. Results announced in Jan-Feb 2025.")
+        st.info("💡 *Note*: Q2 FY26 covers Jul-Sep 2025. Results announced in Oct-Nov 2025.")
     else:
-        st.info("👆 Click 'Refresh Q3 FY25 Calendar' to load results.")
+        st.info("👆 Click 'Refresh Q2 FY26 Calendar' to load upcoming results.")
 
 # --------------------------
-# TAB 3: TECHNICAL ANALYSIS
+# TAB 3: Q3 FY26 EARNINGS
 # --------------------------
 with tab3:
+    st.title("📅 Q3 FY26 Earnings Calendar")
+    st.markdown("Q3 FY26 (Oct-Dec 2025) earnings announcements for F&O stocks")
+    st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
+    st.markdown("---")
+    
+    col1, col2 = st.columns([3, 3])
+    
+    with col1:
+        if st.button("🔄 Refresh Q3 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q3"):
+            with st.spinner("Fetching Q3 FY26 earnings..."):
+                st.cache_data.clear()
+                earnings = fetch_q3_fy26_earnings()
+                st.session_state.earnings_data_q3 = earnings
+                st.session_state.last_earnings_fetch_q3 = datetime.now()
+                st.success(f"✅ Loaded {len(earnings)} Q3 FY26 results!")
+                st.rerun()
+    
+    with col2:
+        if 'last_earnings_fetch_q3' in st.session_state and st.session_state.last_earnings_fetch_q3:
+            time_ago = datetime.now() - st.session_state.last_earnings_fetch_q3
+            minutes_ago = int(time_ago.total_seconds() / 60)
+            st.info(f"⏱ Last updated {minutes_ago} minutes ago")
+    
+    if 'earnings_data_q3' not in st.session_state:
+        with st.spinner("Loading Q3 FY26 calendar..."):
+            earnings = fetch_q3_fy26_earnings()
+            st.session_state.earnings_data_q3 = earnings
+            st.session_state.last_earnings_fetch_q3 = datetime.now()
+    
+    if st.session_state.earnings_data_q3:
+        df_earnings = pd.DataFrame(st.session_state.earnings_data_q3)
+        
+        st.subheader("📊 Q3 FY26 Overview")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Companies", len(df_earnings))
+        with col2:
+            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
+            st.metric("Scheduled", scheduled)
+        with col3:
+            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
+            st.metric("January Results", jan_dates)
+        with col4:
+            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
+            st.metric("February Results", feb_dates)
+        
+        st.markdown("---")
+        
+        # Highlight key reporting dates
+        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2026)")
+        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2026', '16-Jan-2026', '17-Jan-2026'])]
+        if not key_df.empty:
+            st.dataframe(
+                key_df,
+                use_container_width=True,
+                height=300,
+                column_config={
+                    "Company": st.column_config.TextColumn("Company", width="medium"),
+                    "Quarter": st.column_config.TextColumn("Quarter", width="small"),
+                    "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                    "Day": st.column_config.TextColumn("Day", width="small"),
+                    "Status": st.column_config.TextColumn("Status", width="small")
+                }
+            )
+        
+        st.markdown("---")
+        
+        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q3")
+        
+        if search_earnings:
+            mask = df_earnings['Company'].str.contains(search_earnings, case=False)
+            filtered_earnings = df_earnings[mask]
+        else:
+            filtered_earnings = df_earnings
+        
+        st.info(f"Showing {len(filtered_earnings)} companies")
+        
+        st.dataframe(
+            filtered_earnings,
+            use_container_width=True,
+            height=600,
+            column_config={
+                "Company": st.column_config.TextColumn("Company", width="medium"),
+                "Quarter": st.column_config.TextColumn("Quarter", width="small"),
+                "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                "Day": st.column_config.TextColumn("Day", width="small"),
+                "Status": st.column_config.TextColumn("Status", width="small")
+            }
+        )
+        
+        csv_earnings = filtered_earnings.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Q3 FY26 Calendar (CSV)",
+            data=csv_earnings,
+            file_name=f"q3_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="download_q3"
+        )
+        
+        st.info("💡 *Note*: Q3 FY26 covers Oct-Dec 2025. Results will be announced in Jan-Feb 2026.")
+    else:
+        st.info("👆 Click 'Refresh Q3 FY26 Calendar' to load results.")
+
+# --------------------------
+# TAB 4: TECHNICAL ANALYSIS
+# --------------------------
+with tab4:
     st.title("📈 Technical Analysis - Buy/Sell Signals")
     st.markdown("RSI, MACD, and AO analysis for F&O stocks")
     st.markdown("---")
@@ -937,9 +1127,9 @@ with tab3:
             """)
 
 # --------------------------
-# TAB 4: STOCK CHARTS
+# TAB 5: STOCK CHARTS
 # --------------------------
-with tab4:
+with tab5:
     st.title("💹 Stock Price Charts")
     st.markdown("Candlestick charts with SMA/EMA and technical indicators")
     st.markdown("---")
@@ -1111,7 +1301,8 @@ with tab4:
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard shows news, Q3 FY25 earnings, technical analysis, and price charts for F&O stocks")
+st.caption("💡 Dashboard shows news, Q2/Q3 FY26 earnings, technical analysis, and price charts for F&O stocks")
 st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
 st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
+st.caption("📅 FY26 = April 1, 2025 - March 31, 2026")
 st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
