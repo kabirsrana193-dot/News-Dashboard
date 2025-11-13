@@ -1,14 +1,14 @@
 import streamlit as st
 import feedparser
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
-import requests
-from bs4 import BeautifulSoup
 import yfinance as yf
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 
 # Page config
 st.set_page_config(
@@ -139,11 +139,6 @@ FINANCIAL_RSS_FEEDS = [
 ARTICLES_PER_REFRESH = 15
 NEWS_AGE_LIMIT_HOURS = 48
 
-POSITIVE_WORDS = ['surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
-                  'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive']
-NEGATIVE_WORDS = ['fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
-                  'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative']
-
 # --------------------------
 # Initialize session state
 # --------------------------
@@ -157,11 +152,35 @@ if 'watchlist_stocks' not in st.session_state:
     st.session_state.watchlist_stocks = [
         "Reliance", "TCS", "HDFC Bank", "Infosys", 
         "ICICI Bank", "Bharti Airtel", "ITC", "SBI",
-        "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank", "Axis Bank",
-        "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"
+        "Hindustan Unilever", "Bajaj Finance"
     ]
 if 'last_refresh' not in st.session_state:
     st.session_state.last_refresh = None
+if 'finbert_model' not in st.session_state:
+    st.session_state.finbert_model = None
+if 'finbert_tokenizer' not in st.session_state:
+    st.session_state.finbert_tokenizer = None
+
+# --------------------------
+# Load FinBERT Model
+# --------------------------
+@st.cache_resource
+def load_finbert():
+    """Load FinBERT model for financial sentiment analysis"""
+    try:
+        tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+        model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+        return tokenizer, model
+    except Exception as e:
+        st.warning(f"Could not load FinBERT: {e}. Using fallback sentiment analysis.")
+        return None, None
+
+# Load model at startup
+if st.session_state.finbert_tokenizer is None:
+    with st.spinner("Loading FinBERT sentiment model..."):
+        tokenizer, model = load_finbert()
+        st.session_state.finbert_tokenizer = tokenizer
+        st.session_state.finbert_model = model
 
 # --------------------------
 # Technical Analysis Functions
@@ -267,10 +286,46 @@ def generate_signal(ticker_symbol):
         return None
 
 # --------------------------
-# Sentiment analysis
+# FinBERT Sentiment Analysis
 # --------------------------
-def analyze_sentiment(text):
-    """Simple keyword-based sentiment analysis"""
+def analyze_sentiment_finbert(text):
+    """Analyze sentiment using FinBERT model"""
+    tokenizer = st.session_state.finbert_tokenizer
+    model = st.session_state.finbert_model
+    
+    if tokenizer is None or model is None:
+        # Fallback to simple keyword-based
+        return analyze_sentiment_fallback(text)
+    
+    try:
+        # Tokenize and predict
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
+        
+        with torch.no_grad():
+            outputs = model(**inputs)
+            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        
+        # Get sentiment scores
+        scores = predictions[0].tolist()
+        labels = ['positive', 'negative', 'neutral']
+        
+        # Get the sentiment with highest score
+        max_idx = scores.index(max(scores))
+        sentiment = labels[max_idx]
+        confidence = scores[max_idx]
+        
+        return sentiment, round(confidence, 2)
+    
+    except Exception as e:
+        return analyze_sentiment_fallback(text)
+
+def analyze_sentiment_fallback(text):
+    """Fallback keyword-based sentiment analysis"""
+    POSITIVE_WORDS = ['surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
+                      'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive']
+    NEGATIVE_WORDS = ['fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
+                      'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative']
+    
     text_lower = text.lower()
     positive_count = sum(1 for word in POSITIVE_WORDS if word in text_lower)
     negative_count = sum(1 for word in NEGATIVE_WORDS if word in text_lower)
@@ -336,18 +391,16 @@ def get_mentioned_stocks(text):
     return mentioned if mentioned else ["Other"]
 
 def fetch_news(num_articles=15, specific_stock=None, force_new=False):
-    """Fetch news articles - FIXED VERSION"""
+    """Fetch news articles"""
     all_articles = []
     seen_titles = set()
     
-    # Always start fresh for better reliability
     if specific_stock and specific_stock != "All Stocks":
         priority_stocks = [specific_stock]
         num_articles = num_articles * 3
     else:
         priority_stocks = FNO_STOCKS[:30]
     
-    # Fetch from Google News RSS
     for stock in priority_stocks:
         try:
             url = f"https://news.google.com/rss/search?q={stock}+stock+india+when:2d&hl=en-IN&gl=IN&ceid=IN:en"
@@ -370,7 +423,6 @@ def fetch_news(num_articles=15, specific_stock=None, force_new=False):
         if len(all_articles) >= num_articles:
             break
     
-    # Fetch from financial RSS feeds
     for feed_url, source_name in FINANCIAL_RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_url)
@@ -402,7 +454,7 @@ def fetch_news(num_articles=15, specific_stock=None, force_new=False):
     return all_articles[:num_articles]
 
 def process_news(articles):
-    """Process news articles with sentiment analysis"""
+    """Process news articles with FinBERT sentiment analysis"""
     records = []
     for art in articles:
         title = art.title
@@ -411,7 +463,8 @@ def process_news(articles):
         published = getattr(art, 'published', 'Unknown')
         mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
         
-        sentiment, score = analyze_sentiment(title)
+        # Use FinBERT for sentiment analysis
+        sentiment, score = analyze_sentiment_finbert(title)
         
         records.append({
             "Title": title,
@@ -438,16 +491,16 @@ def filter_news_by_stock(news_articles, stock_name):
 # Streamlit App
 # --------------------------
 
-# Main tabs - REMOVED EARNINGS TABS
+# Main tabs
 tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📈 Technical Analysis", "💹 Stock Charts", "📊 Live Multi-Chart"])
 
 # --------------------------
-# TAB 1: NEWS DASHBOARD - FIXED
+# TAB 1: NEWS DASHBOARD with FinBERT
 # --------------------------
 with tab1:
     st.title("📈 F&O Stocks News Dashboard (Last 48 Hours)")
-    st.markdown("Real-time news about F&O stocks with sentiment analysis")
-    st.markdown(f"*Showing news from last 2 days* | *{len(FNO_STOCKS)} F&O stocks tracked*")
+    st.markdown("Real-time news with **FinBERT** AI sentiment analysis")
+    st.markdown(f"🤖 Powered by FinBERT | {len(FNO_STOCKS)} F&O stocks tracked")
     st.markdown("---")
 
     col1, col2, col3 = st.columns([2, 2, 2])
@@ -461,10 +514,8 @@ with tab1:
             key="stock_filter"
         )
         
-        # FIXED: Handle stock selection changes properly
         if selected_stock != st.session_state.selected_stock:
             st.session_state.selected_stock = selected_stock
-            # Clear existing news and fetch fresh
             with st.spinner(f"Fetching news for {selected_stock}..."):
                 new_articles = fetch_news(ARTICLES_PER_REFRESH * 2, selected_stock, force_new=True)
                 if new_articles:
@@ -474,16 +525,12 @@ with tab1:
                     st.rerun()
 
     with col2:
-        # FIXED: Refresh button now works properly
         if st.button("🔄 Refresh News", type="primary", use_container_width=True):
             with st.spinner(f"Fetching latest updates..."):
-                # Fetch fresh articles
                 new_articles = fetch_news(ARTICLES_PER_REFRESH * 2, st.session_state.selected_stock, force_new=True)
                 if new_articles:
                     processed_news = process_news(new_articles)
-                    # Add new articles to existing ones
                     all_articles = processed_news + st.session_state.news_articles
-                    # Remove duplicates
                     seen = set()
                     unique_articles = []
                     for article in all_articles:
@@ -505,15 +552,13 @@ with tab1:
             time.sleep(1)
             st.rerun()
 
-    # Show last refresh time
     if st.session_state.last_refresh:
         time_ago = datetime.now() - st.session_state.last_refresh
         minutes_ago = int(time_ago.total_seconds() / 60)
-        st.caption(f"⏱ Last refreshed {minutes_ago} minutes ago")
+        st.caption(f"⏱ Last refreshed {minutes_ago} minutes ago | 🤖 FinBERT AI Sentiment Analysis")
 
-    # Load initial content if empty
     if not st.session_state.news_articles:
-        with st.spinner("Loading initial content..."):
+        with st.spinner("Loading initial content with FinBERT analysis..."):
             initial_news = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
             if initial_news:
                 st.session_state.news_articles = process_news(initial_news)
@@ -543,7 +588,7 @@ with tab1:
         
         st.markdown("---")
         
-        st.subheader("📊 Sentiment Distribution")
+        st.subheader("📊 FinBERT Sentiment Distribution")
         sentiment_counts = df_all['Sentiment'].value_counts().reset_index()
         sentiment_counts.columns = ["Sentiment", "Count"]
         
@@ -557,7 +602,7 @@ with tab1:
                 "neutral": "gray",
                 "negative": "red"
             },
-            title=f"Sentiment Analysis for {st.session_state.selected_stock}",
+            title=f"AI Sentiment Analysis for {st.session_state.selected_stock}",
             text="Count"
         )
         fig.update_traces(textposition='outside')
@@ -582,7 +627,7 @@ with tab1:
                 }
                 
                 st.markdown(f"[{article['Title']}]({article['Link']})")
-                sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
+                sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (FinBERT: {article['Score']})"
                 st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
                 
                 if article.get('Stocks'):
@@ -722,29 +767,7 @@ with tab2:
     
     else:
         st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals for F&O stocks.")
-        
-        st.markdown("---")
-        st.subheader("📚 How It Works")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            **Technical Indicators:**
-            - **RSI**: Identifies overbought (>70) and oversold (<30) conditions
-            - **MACD**: Shows bullish/bearish momentum crossovers
-            - **AO**: Awesome Oscillator for momentum confirmation
-            """)
-        
-        with col2:
-            st.markdown("""
-            **Signal Scoring:**
-            - **Strong Buy**: Score ≥ 3 (Multiple bullish indicators)
-            - **Buy**: Score 1-2 (Some bullish signals)
-            - **Hold**: Score 0 (Neutral)
-            - **Sell**: Score -1 to -2 (Some bearish signals)
-            """)
-            
+
 # --------------------------
 # TAB 3: STOCK CHARTS
 # --------------------------
@@ -904,23 +927,25 @@ with tab3:
             st.info(f"Ticker attempted: {ticker}")
 
 # --------------------------
-# TAB 4: LIVE MULTI-CHART (4x4 GRID)
+# TAB 4: LIVE MULTI-CHART (CUSTOMIZABLE GRID)
 # --------------------------
 with tab4:
     st.title("📊 Live Multi-Chart Dashboard")
-    st.markdown("Monitor up to 16 stocks simultaneously with live intraday charts")
+    st.markdown("Monitor multiple stocks simultaneously with customizable live charts")
     st.markdown("---")
     
-    col1, col2, col3 = st.columns([3, 2, 1])
+    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
     
     with col1:
-        st.markdown("**📋 Manage Your Watchlist (16 stocks max)**")
+        st.markdown("📋 **Manage Your Watchlist**")
+        
+        max_stocks = st.number_input("Max stocks to display", min_value=1, max_value=20, value=10, step=1)
         
         selected_watchlist = st.multiselect(
             "Select stocks to monitor",
             options=sorted(FNO_STOCKS),
-            default=st.session_state.watchlist_stocks[:16],
-            max_selections=16,
+            default=st.session_state.watchlist_stocks[:max_stocks],
+            max_selections=max_stocks,
             key="watchlist_selector"
         )
         
@@ -929,8 +954,8 @@ with tab4:
     
     with col2:
         chart_period_multi = st.selectbox(
-            "📅 Intraday Period",
-            options=["1d", "5d"],
+            "📅 Period",
+            options=["1d", "5d", "1mo"],
             index=0,
             key="multi_chart_period"
         )
@@ -943,22 +968,43 @@ with tab4:
         )
     
     with col3:
-        if st.button("🔄 Refresh All", type="primary", use_container_width=True):
+        chart_height = st.number_input(
+            "📏 Height",
+            min_value=150,
+            max_value=400,
+            value=250,
+            step=25,
+            key="chart_height"
+        )
+    
+    with col4:
+        if st.button("🔄 Refresh", type="primary", use_container_width=True):
             st.rerun()
         
-        st.caption(f"**{len(selected_watchlist)}/16** stocks")
+        st.caption(f"**{len(selected_watchlist)}/{max_stocks}** stocks")
     
     st.markdown("---")
     
     if not selected_watchlist:
         st.info("👆 Select stocks from the dropdown to start monitoring")
     else:
-        num_stocks = len(selected_watchlist)
+        # Dynamic columns based on number of stocks
+        if len(selected_watchlist) <= 2:
+            num_cols = 2
+        elif len(selected_watchlist) <= 4:
+            num_cols = 2
+        elif len(selected_watchlist) <= 9:
+            num_cols = 3
+        else:
+            num_cols = 2  # Changed from 4 to 2 for better spacing with 10 stocks
         
-        for row in range(4):
-            cols = st.columns(4)
+        num_stocks = len(selected_watchlist)
+        num_rows = (num_stocks + num_cols - 1) // num_cols
+        
+        for row in range(num_rows):
+            cols = st.columns(num_cols)
             for col_idx, col in enumerate(cols):
-                stock_idx = row * 4 + col_idx
+                stock_idx = row * num_cols + col_idx
                 
                 if stock_idx < num_stocks:
                     stock_name = selected_watchlist[stock_idx]
@@ -982,7 +1028,7 @@ with tab4:
                                     color = "red"
                                     arrow = "🔴"
                                 
-                                st.markdown(f"**{arrow} {stock_name}**")
+                                st.markdown(f"### {arrow} **{stock_name}**")
                                 st.metric(
                                     label="Price",
                                     value=f"₹{current_price:.2f}",
@@ -996,38 +1042,48 @@ with tab4:
                                     mode='lines',
                                     line=dict(color=color, width=2),
                                     fill='tozeroy',
-                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)'
+                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)',
+                                    name='Price'
                                 ))
                                 
                                 fig_mini.update_layout(
-                                    height=200,
-                                    margin=dict(l=0, r=0, t=0, b=0),
-                                    xaxis=dict(showgrid=False, showticklabels=False),
-                                    yaxis=dict(showgrid=False, showticklabels=True),
+                                    height=chart_height,
+                                    margin=dict(l=10, r=10, t=10, b=10),
+                                    xaxis=dict(showgrid=True, showticklabels=True, gridcolor='rgba(128,128,128,0.2)'),
+                                    yaxis=dict(showgrid=True, showticklabels=True, gridcolor='rgba(128,128,128,0.2)'),
                                     showlegend=False,
                                     plot_bgcolor='rgba(0,0,0,0)',
-                                    paper_bgcolor='rgba(0,0,0,0)'
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    hovermode='x unified'
                                 )
                                 
                                 st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
                                 
-                                st.caption(f"H: ₹{df['High'].max():.2f} | L: ₹{df['Low'].min():.2f}")
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.caption(f"📈 High: ₹{df['High'].max():.2f}")
+                                with col_b:
+                                    st.caption(f"📉 Low: ₹{df['Low'].min():.2f}")
+                                
+                                st.caption(f"📊 Vol: {df['Volume'].iloc[-1]:,.0f}")
                             
                             else:
-                                st.warning(f"No data for {stock_name}")
+                                st.warning(f"⚠️ No data for {stock_name}")
                         
                         except Exception as e:
-                            st.error(f"{stock_name}: Error")
-                            st.caption(str(e)[:50])
+                            st.error(f"❌ {stock_name}")
+                            st.caption(f"Error: {str(e)[:50]}")
         
         st.markdown("---")
-        st.caption("💡 **Tip:** Charts auto-update when you click 'Refresh All'. Add/remove stocks using the dropdown above.")
-        st.caption("📊 **Live Data:** Intraday charts show real-time price movements during market hours")
+        st.caption("💡 **Tip:** Adjust the number of stocks, chart height, period, and interval using the controls above")
+        st.caption("📊 **Live Data:** Charts show real-time price movements. Click 'Refresh' to update all charts")
+        st.caption("⚡ **Performance:** For best performance, limit to 10 stocks or fewer")
 
 # --------------------------
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard shows news, technical analysis, and price charts for F&O stocks")
-st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
+st.caption("💡 Dashboard with **FinBERT AI** sentiment analysis, technical indicators, and live price charts")
+st.caption("📊 Technical: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
+st.caption("🤖 Powered by FinBERT (ProsusAI) for financial sentiment analysis")
 st.caption("⚠ **Disclaimer:** For educational purposes only. Not financial advice.")
