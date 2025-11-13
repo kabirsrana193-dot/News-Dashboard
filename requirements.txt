@@ -7,4 +7,4 @@ beautifulsoup4
 yfinance
 numpy
 transformers
-torch
+torch>=2.1.0
