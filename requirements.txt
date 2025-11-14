@@ -5,6 +5,6 @@ plotly>=5.17.0
 numpy>=1.24.0
 transformers
 torch>=2.0.0
-breeze-connect>=1.0.0
+ytfinance
 beautifulsoup4>=4.12.0
 requests>=2.31.0
