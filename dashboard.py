@@ -3,12 +3,12 @@ import feedparser
 import pandas as pd
 from datetime import datetime, timedelta
 import time
+import yfinance as yf
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-from breeze_connect import BreezeConnect
 
 # Page config
 st.set_page_config(
@@ -16,36 +16,6 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
-
-# --------------------------
-# Breeze API Configuration
-# --------------------------
-BREEZE_API_KEY = "68`47N89970w1dH7u1s5347j8403f287"
-BREEZE_API_SECRET = "5v9k141093cf4361528$z24Q7(Yv2839"  # Add your API Secret here
-BREEZE_SESSION_TOKEN = "53694001"  # Add session token from Breeze login
-
-# Note: Session token can be obtained from Breeze web login
-# It expires after 24 hours and needs to be regenerated
-
-# Breeze stock code mapping (NSE symbol format)
-BREEZE_STOCK_MAP = {
-    "Reliance": "RELIANCE", "TCS": "TCS", "HDFC Bank": "HDFCBANK",
-    "Infosys": "INFY", "ICICI Bank": "ICICIBANK", "Bharti Airtel": "BHARTIARTL",
-    "ITC": "ITC", "State Bank of India": "SBIN", "SBI": "SBIN",
-    "Hindustan Unilever": "HINDUNILVR", "HUL": "HINDUNILVR",
-    "Bajaj Finance": "BAJFINANCE", "Kotak Mahindra Bank": "KOTAKBANK",
-    "Axis Bank": "AXISBANK", "Larsen & Toubro": "LT", "L&T": "LT",
-    "Asian Paints": "ASIANPAINT", "Maruti Suzuki": "MARUTI",
-    "Titan": "TITAN", "Sun Pharma": "SUNPHARMA", "HCL Tech": "HCLTECH",
-    "Nestle": "NESTLEIND", "Adani Enterprises": "ADANIENT",
-    "Tata Motors": "TATAMOTORS", "Wipro": "WIPRO", "Power Grid": "POWERGRID",
-    "NTPC": "NTPC", "Bajaj Finserv": "BAJAJFINSV", "Tata Steel": "TATASTEEL",
-    "Grasim": "GRASIM", "Hindalco": "HINDALCO", "IndusInd Bank": "INDUSINDBK",
-    "Mahindra & Mahindra": "M&M", "M&M": "M&M", "Coal India": "COALINDIA",
-    "JSW Steel": "JSWSTEEL", "Tata Consumer": "TATACONSUM",
-    "Eicher Motors": "EICHERMOT", "BPCL": "BPCL", "Tech Mahindra": "TECHM",
-    "Dr Reddy": "DRREDDY", "Cipla": "CIPLA", "UPL": "UPL"
-}
 
 # --------------------------
 # Config - All F&O Stocks in India
@@ -190,186 +160,6 @@ if 'finbert_model' not in st.session_state:
     st.session_state.finbert_model = None
 if 'finbert_tokenizer' not in st.session_state:
     st.session_state.finbert_tokenizer = None
-if 'breeze_instance' not in st.session_state:
-    st.session_state.breeze_instance = None
-if 'live_prices' not in st.session_state:
-    st.session_state.live_prices = {}
-if 'breeze_connected' not in st.session_state:
-    st.session_state.breeze_connected = False
-
-# --------------------------
-# Breeze API Functions
-# --------------------------
-@st.cache_resource
-def init_breeze_connection():
-    """Initialize Breeze API connection with session"""
-    try:
-        breeze = BreezeConnect(api_key=BREEZE_API_KEY)
-        
-        # Check if credentials are configured
-        if BREEZE_API_SECRET == "YOUR_API_SECRET_HERE" or BREEZE_SESSION_TOKEN == "YOUR_SESSION_TOKEN_HERE":
-            st.warning("⚠️ Breeze API credentials not configured")
-            st.info("""
-            **To enable live data, add these in the code:**
-            1. BREEZE_API_SECRET - Your API Secret from ICICI Direct
-            2. BREEZE_SESSION_TOKEN - Generate from Breeze login (expires in 24h)
-            
-            **How to get Session Token:**
-            - Visit: https://api.icicidirect.com/apiuser/login?api_key=YOUR_API_KEY
-            - Login with your credentials
-            - Copy the session_token from the response
-            """)
-            st.session_state.breeze_connected = False
-            return None
-        
-        # Generate session
-        try:
-            session_response = breeze.generate_session(
-                api_secret=BREEZE_API_SECRET,
-                session_token=BREEZE_SESSION_TOKEN
-            )
-            
-            if session_response and session_response.get('Success'):
-                st.success("✅ Breeze API Connected Successfully!")
-                st.session_state.breeze_instance = breeze
-                st.session_state.breeze_connected = True
-                return breeze
-            else:
-                error_msg = session_response.get('Error', 'Unknown error')
-                st.error(f"❌ Session generation failed: {error_msg}")
-                st.info("Please check your API Secret and Session Token are correct and not expired.")
-                st.session_state.breeze_connected = False
-                return None
-                
-        except Exception as session_error:
-            st.error(f"❌ Session error: {str(session_error)}")
-            st.info("""
-            **Common issues:**
-            - Session token expired (they last 24 hours)
-            - Incorrect API Secret
-            - API Key mismatch
-            
-            **Generate new session token at:**
-            https://api.icicidirect.com/apiuser/login?api_key={}
-            """.format(BREEZE_API_KEY.replace('`', '%60')))
-            st.session_state.breeze_connected = False
-            return None
-            
-    except Exception as e:
-        st.error(f"❌ Breeze initialization failed: {str(e)}")
-        st.info("💡 Make sure you have installed: pip install breeze-connect")
-        st.session_state.breeze_connected = False
-        return None
-
-def get_live_price_breeze(stock_name):
-    """Get live price from Breeze API"""
-    try:
-        if not st.session_state.breeze_connected or st.session_state.breeze_instance is None:
-            return None
-        
-        breeze = st.session_state.breeze_instance
-        stock_code = BREEZE_STOCK_MAP.get(stock_name)
-        
-        if not stock_code:
-            return None
-        
-        # Get quotes using Breeze API
-        try:
-            quote = breeze.get_quotes(
-                stock_code=stock_code,
-                exchange_code="NSE",
-                product_type="cash"
-            )
-            
-            if quote and quote.get('Success'):
-                data = quote.get('Success', [{}])[0]
-                return {
-                    'ltp': float(data.get('ltp', 0)),
-                    'open': float(data.get('open', 0)),
-                    'high': float(data.get('high', 0)),
-                    'low': float(data.get('low', 0)),
-                    'close': float(data.get('prev_close', 0)),
-                    'volume': int(data.get('volume', 0)),
-                    'change': float(data.get('change', 0)),
-                    'change_pct': float(data.get('change_percentage', 0))
-                }
-            elif quote and quote.get('Error'):
-                # Log error but don't display for each stock
-                return None
-            return None
-        except Exception as quote_error:
-            # Silently fail for individual stocks
-            return None
-    except Exception as e:
-        return None
-
-def get_historical_data_breeze(stock_name, interval="1day", from_date=None, to_date=None):
-    """Get historical data from Breeze API"""
-    try:
-        if not st.session_state.breeze_connected or st.session_state.breeze_instance is None:
-            return None
-        
-        breeze = st.session_state.breeze_instance
-        stock_code = BREEZE_STOCK_MAP.get(stock_name)
-        
-        if not stock_code:
-            return None
-        
-        # Set default dates
-        if to_date is None:
-            to_date = datetime.now()
-        if from_date is None:
-            if interval == "1minute":
-                from_date = to_date - timedelta(days=1)
-            elif interval == "5minute":
-                from_date = to_date - timedelta(days=5)
-            else:
-                from_date = to_date - timedelta(days=90)
-        
-        # Format dates for Breeze API (ISO format)
-        from_date_str = from_date.strftime("%Y-%m-%dT07:00:00.000Z")
-        to_date_str = to_date.strftime("%Y-%m-%dT18:00:00.000Z")
-        
-        # Get historical data
-        try:
-            hist_data = breeze.get_historical_data(
-                interval=interval,
-                from_date=from_date_str,
-                to_date=to_date_str,
-                stock_code=stock_code,
-                exchange_code="NSE",
-                product_type="cash"
-            )
-            
-            if hist_data and hist_data.get('Success') and len(hist_data.get('Success', [])) > 0:
-                df = pd.DataFrame(hist_data['Success'])
-                
-                # Convert datetime
-                if 'datetime' in df.columns:
-                    df['datetime'] = pd.to_datetime(df['datetime'])
-                    df = df.set_index('datetime')
-                
-                # Rename columns to standard format
-                column_mapping = {
-                    'open': 'Open',
-                    'high': 'High',
-                    'low': 'Low',
-                    'close': 'Close',
-                    'volume': 'Volume'
-                }
-                
-                df = df.rename(columns=column_mapping)
-                
-                # Return only required columns
-                available_cols = [col for col in ['Open', 'High', 'Low', 'Close', 'Volume'] if col in df.columns]
-                return df[available_cols]
-            else:
-                return None
-        except Exception as hist_error:
-            return None
-            
-    except Exception as e:
-        return None
 
 # --------------------------
 # Load FinBERT Model
@@ -391,11 +181,6 @@ if st.session_state.finbert_tokenizer is None:
         tokenizer, model = load_finbert()
         st.session_state.finbert_tokenizer = tokenizer
         st.session_state.finbert_model = model
-
-# Initialize Breeze connection
-if st.session_state.breeze_instance is None:
-    with st.spinner("Connecting to Breeze API..."):
-        init_breeze_connection()
 
 # --------------------------
 # Technical Analysis Functions
@@ -431,26 +216,13 @@ def calculate_ema(data, period):
     """Calculate Exponential Moving Average"""
     return data.ewm(span=period, adjust=False).mean()
 
-def get_live_prices_batch(stock_names):
-    """Get live prices for multiple stocks"""
-    prices = {}
-    for stock in stock_names:
-        price_data = get_live_price_breeze(stock)
-        if price_data:
-            prices[stock] = price_data
-    return prices
-
-def generate_signal_breeze(stock_name):
-    """Generate buy/sell signal using Breeze historical data"""
+def generate_signal(ticker_symbol):
+    """Generate buy/sell signal based on technical indicators"""
     try:
-        # Get 3 months of daily data
-        df = get_historical_data_breeze(
-            stock_name, 
-            interval="1day",
-            from_date=datetime.now() - timedelta(days=90)
-        )
+        stock = yf.Ticker(ticker_symbol)
+        df = stock.history(period='3mo')
         
-        if df is None or df.empty or len(df) < 50:
+        if df.empty or len(df) < 50:
             return None
         
         df['RSI'] = calculate_rsi(df['Close'])
@@ -522,18 +294,22 @@ def analyze_sentiment_finbert(text):
     model = st.session_state.finbert_model
     
     if tokenizer is None or model is None:
+        # Fallback to simple keyword-based
         return analyze_sentiment_fallback(text)
     
     try:
+        # Tokenize and predict
         inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
         
         with torch.no_grad():
             outputs = model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
         
+        # Get sentiment scores
         scores = predictions[0].tolist()
         labels = ['positive', 'negative', 'neutral']
         
+        # Get the sentiment with highest score
         max_idx = scores.index(max(scores))
         sentiment = labels[max_idx]
         confidence = scores[max_idx]
@@ -687,6 +463,7 @@ def process_news(articles):
         published = getattr(art, 'published', 'Unknown')
         mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
         
+        # Use FinBERT for sentiment analysis
         sentiment, score = analyze_sentiment_finbert(title)
         
         records.append({
@@ -723,13 +500,6 @@ tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📈 Technical Analysi
 with tab1:
     st.title("📈 F&O Stocks News Dashboard (Last 48 Hours)")
     st.markdown("Real-time news with **FinBERT** AI sentiment analysis")
-    
-    # Breeze connection status
-    if st.session_state.breeze_connected:
-        st.success("🟢 Breeze API Connected - Live prices available")
-    else:
-        st.warning("🟡 Breeze API not connected - Using fallback data")
-    
     st.markdown(f"🤖 Powered by FinBERT | {len(FNO_STOCKS)} F&O stocks tracked")
     st.markdown("---")
 
@@ -892,10 +662,6 @@ with tab2:
         if st.button("🔄 Run Technical Analysis", type="primary", use_container_width=True, key="run_tech"):
             st.session_state.technical_data = []
             
-            if not st.session_state.breeze_connected:
-                st.error("❌ Breeze API not connected. Please check your API credentials.")
-                st.stop()
-            
             if selected_analysis == "All Stocks":
                 num_stocks = len(FNO_STOCKS)
             else:
@@ -904,18 +670,23 @@ with tab2:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            stocks_to_analyze = [s for s in FNO_STOCKS if s in BREEZE_STOCK_MAP][:num_stocks]
+            stocks_to_analyze = FNO_STOCKS[:num_stocks]
             
             for idx, stock_name in enumerate(stocks_to_analyze):
-                status_text.text(f"Analyzing {stock_name}... ({idx+1}/{len(stocks_to_analyze)})")
+                ticker = STOCK_TICKER_MAP.get(stock_name)
+                if not ticker:
+                    continue
                 
-                signal_data = generate_signal_breeze(stock_name)
+                status_text.text(f"Analyzing {stock_name}... ({idx+1}/{num_stocks})")
+                
+                signal_data = generate_signal(ticker)
                 if signal_data:
                     signal_data['stock'] = stock_name
+                    signal_data['ticker'] = ticker
                     st.session_state.technical_data.append(signal_data)
                 
-                progress_bar.progress((idx + 1) / len(stocks_to_analyze))
-                time.sleep(0.2)
+                progress_bar.progress((idx + 1) / num_stocks)
+                time.sleep(0.1)
             
             progress_bar.empty()
             status_text.empty()
@@ -981,7 +752,7 @@ with tab2:
                 st.markdown("---")
                 st.markdown(f"**Technical Signals:** {row['signals']}")
         
-        download_df = filtered_tech[['stock', 'price', 'rsi', 'macd', 'ao', 'recommendation', 'score']]
+        download_df = filtered_tech[['stock', 'ticker', 'price', 'rsi', 'macd', 'ao', 'recommendation', 'score']]
         csv_tech = download_df.to_csv(index=False)
         st.download_button(
             label="📥 Download Technical Analysis (CSV)",
@@ -991,39 +762,189 @@ with tab2:
         )
         
         st.markdown("---")
-        st.caption("📊 **Indicators Used:** RSI, MACD, AO")
-        st.caption("⚠ **Disclaimer:** Educational purposes only. Not financial advice.")
+        st.caption("📊 **Indicators Used:** RSI (Relative Strength Index), MACD (Moving Average Convergence Divergence), AO (Awesome Oscillator)")
+        st.caption("⚠ **Disclaimer:** This is for educational purposes only. Not financial advice. Always do your own research.")
     
     else:
-        st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals.")
-
-
+        st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals for F&O stocks.")
 
 # --------------------------
-# TAB 4: LIVE MULTI-CHART with Breeze API
+# TAB 3: STOCK CHARTS
+# --------------------------
+with tab3:
+    st.title("💹 Stock Price Charts")
+    st.markdown("Candlestick charts with SMA/EMA and technical indicators")
+    st.markdown("---")
+    
+    col1, col2 = st.columns([2, 2])
+    
+    with col1:
+        selected_chart_stock = st.selectbox(
+            "📊 Select Stock",
+            options=sorted(FNO_STOCKS),
+            key="chart_stock"
+        )
+    
+    with col2:
+        period = st.selectbox(
+            "📅 Time Period",
+            options=["1mo", "3mo", "6mo", "1y", "2y"],
+            index=2,
+            key="chart_period"
+        )
+    
+    ticker = STOCK_TICKER_MAP.get(selected_chart_stock)
+    
+    if ticker:
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period)
+            
+            if not df.empty and len(df) > 0:
+                df['RSI'] = calculate_rsi(df['Close'])
+                df['MACD'], df['Signal'] = calculate_macd(df['Close'])
+                df['AO'] = calculate_ao(df['High'], df['Low'])
+                
+                df['SMA_20'] = calculate_sma(df['Close'], 20)
+                df['SMA_50'] = calculate_sma(df['Close'], 50)
+                df['SMA_200'] = calculate_sma(df['Close'], 200)
+                
+                df['EMA_9'] = calculate_ema(df['Close'], 9)
+                df['EMA_20'] = calculate_ema(df['Close'], 20)
+                df['EMA_50'] = calculate_ema(df['Close'], 50)
+                
+                current_price = df['Close'].iloc[-1]
+                price_change = df['Close'].iloc[-1] - df['Close'].iloc[0]
+                price_change_pct = (price_change / df['Close'].iloc[0]) * 100
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Current Price", f"₹{current_price:.2f}")
+                with col2:
+                    st.metric("Change", f"₹{price_change:.2f}", f"{price_change_pct:.2f}%")
+                with col3:
+                    st.metric("High", f"₹{df['High'].max():.2f}")
+                with col4:
+                    st.metric("Low", f"₹{df['Low'].min():.2f}")
+                
+                st.markdown("---")
+                
+                fig = go.Figure(data=[go.Candlestick(
+                    x=df.index,
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'],
+                    name='Price'
+                )])
+                
+                fig.update_layout(
+                    title=f"{selected_chart_stock} - Price Chart",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=500,
+                    xaxis_rangeslider_visible=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                fig_sma = go.Figure()
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
+                                           line=dict(color='orange', dash='solid')))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
+                                           line=dict(color='red', dash='solid')))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_200'], name='SMA 200', 
+                                           line=dict(color='purple', dash='solid')))
+                
+                fig_sma.update_layout(
+                    title="Simple Moving Averages (SMA 20, 50, 200)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_sma, use_container_width=True)
+                
+                fig_ema = go.Figure()
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], name='EMA 9', 
+                                           line=dict(color='green', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
+                                           line=dict(color='yellow', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
+                                           line=dict(color='cyan', dash='dash')))
+                
+                fig_ema.update_layout(
+                    title="Exponential Moving Averages (EMA 9, 20, 50)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_ema, use_container_width=True)
+                
+                fig_rsi = go.Figure()
+                fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='purple')))
+                fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought (70)")
+                fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold (30)")
+                fig_rsi.update_layout(
+                    title="RSI (Relative Strength Index)",
+                    xaxis_title="Date",
+                    yaxis_title="RSI",
+                    height=300
+                )
+                st.plotly_chart(fig_rsi, use_container_width=True)
+                
+                fig_macd = go.Figure()
+                fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='blue')))
+                fig_macd.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal', line=dict(color='orange')))
+                fig_macd.update_layout(
+                    title="MACD (Moving Average Convergence Divergence)",
+                    xaxis_title="Date",
+                    yaxis_title="MACD",
+                    height=300
+                )
+                st.plotly_chart(fig_macd, use_container_width=True)
+                
+                fig_ao = go.Figure()
+                colors = ['green' if val > 0 else 'red' for val in df['AO']]
+                fig_ao.add_trace(go.Bar(x=df.index, y=df['AO'], name='AO', marker_color=colors))
+                fig_ao.update_layout(
+                    title="AO (Awesome Oscillator)",
+                    xaxis_title="Date",
+                    yaxis_title="AO",
+                    height=300
+                )
+                st.plotly_chart(fig_ao, use_container_width=True)
+                
+            else:
+                st.error(f"No data available for {selected_chart_stock}.")
+                st.info(f"Ticker used: {ticker}")
+        
+        except Exception as e:
+            st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
+            st.info(f"Ticker attempted: {ticker}")
+
+# --------------------------
+# TAB 4: LIVE MULTI-CHART (CUSTOMIZABLE GRID)
 # --------------------------
 with tab4:
     st.title("📊 Live Multi-Chart Dashboard")
-    st.markdown("Monitor multiple stocks with **LIVE** Breeze API prices (auto-updates every 5 seconds)")
-    
-    if st.session_state.breeze_connected:
-        st.success("🟢 Breeze API Connected - Receiving live market data")
-    else:
-        st.error("🔴 Breeze API Not Connected - Please check your API credentials")
-    
+    st.markdown("Monitor multiple stocks simultaneously with customizable live charts")
     st.markdown("---")
     
-    col1, col2, col3 = st.columns([3, 2, 1])
+    col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
     
     with col1:
         st.markdown("📋 **Manage Your Watchlist**")
         
-        max_stocks = st.number_input("Max stocks to display", min_value=1, max_value=16, value=10, step=1)
+        max_stocks = st.number_input("Max stocks to display", min_value=1, max_value=20, value=10, step=1)
         
         selected_watchlist = st.multiselect(
             "Select stocks to monitor",
-            options=sorted([s for s in FNO_STOCKS if s in BREEZE_STOCK_MAP]),
-            default=[s for s in st.session_state.watchlist_stocks if s in BREEZE_STOCK_MAP][:max_stocks],
+            options=sorted(FNO_STOCKS),
+            default=st.session_state.watchlist_stocks[:max_stocks],
             max_selections=max_stocks,
             key="watchlist_selector"
         )
@@ -1032,238 +953,137 @@ with tab4:
             st.session_state.watchlist_stocks = selected_watchlist
     
     with col2:
-        update_interval = st.selectbox(
-            "⏱ Update Interval",
-            options=["5 seconds", "10 seconds", "30 seconds", "60 seconds"],
+        chart_period_multi = st.selectbox(
+            "📅 Period",
+            options=["1d", "5d", "1mo"],
             index=0,
-            key="update_interval"
+            key="multi_chart_period"
         )
-        interval_seconds = int(update_interval.split()[0])
+        
+        chart_interval = st.selectbox(
+            "⏱ Interval",
+            options=["1m", "5m", "15m", "30m", "60m"],
+            index=2,
+            key="multi_chart_interval"
+        )
     
     with col3:
+        chart_height = st.number_input(
+            "📏 Height",
+            min_value=150,
+            max_value=400,
+            value=250,
+            step=25,
+            key="chart_height"
+        )
+    
+    with col4:
+        if st.button("🔄 Refresh", type="primary", use_container_width=True):
+            st.rerun()
+        
         st.caption(f"**{len(selected_watchlist)}/{max_stocks}** stocks")
-        st.caption(f"🔄 Auto-update: {update_interval}")
     
     st.markdown("---")
     
     if not selected_watchlist:
-        st.info("👆 Select stocks from the dropdown to start monitoring live prices")
+        st.info("👆 Select stocks from the dropdown to start monitoring")
     else:
-        # Create placeholder for live updates
-        chart_placeholder = st.empty()
-        
-        # Auto-refresh loop
-        if st.session_state.breeze_connected:
-            with chart_placeholder.container():
-                # Fetch live prices from Breeze
-                live_prices = get_live_prices_batch(selected_watchlist)
-                st.session_state.live_prices = live_prices
-                
-                # Check if we got any data
-                if not live_prices or len(live_prices) == 0:
-                    st.error("❌ No live data received from Breeze API")
-                    st.info("""
-                    **Possible reasons:**
-                    1. Market is closed (Trading hours: 9:15 AM - 3:30 PM IST)
-                    2. Session token expired (generate new token)
-                    3. API rate limit reached
-                    4. Check your Breeze API subscription plan
-                    
-                    **What to do:**
-                    - Verify market hours
-                    - Generate new session token (see GET_SESSION_TOKEN.md)
-                    - Wait a few minutes and try again
-                    """)
-                    st.stop()
-                
-                # Calculate grid layout
-                num_stocks = len(selected_watchlist)
-                if num_stocks <= 2:
-                    num_cols = 2
-                elif num_stocks <= 4:
-                    num_cols = 2
-                elif num_stocks <= 9:
-                    num_cols = 3
-                else:
-                    num_cols = 4
-                
-                num_rows = (num_stocks + num_cols - 1) // num_cols
-                
-                # Display live prices in grid
-                stocks_with_data = 0
-                for row in range(num_rows):
-                    cols = st.columns(num_cols)
-                    for col_idx, col in enumerate(cols):
-                        stock_idx = row * num_cols + col_idx
-                        
-                        if stock_idx < num_stocks:
-                            stock_name = selected_watchlist[stock_idx]
-                            price_data = live_prices.get(stock_name)
-                            
-                            with col:
-                                if price_data and price_data.get('ltp', 0) > 0:
-                                    stocks_with_data += 1
-                                    ltp = price_data['ltp']
-                                    change = price_data['change']
-                                    change_pct = price_data['change_pct']
-                                    
-                                    if change >= 0:
-                                        color = "green"
-                                        arrow = "🟢"
-                                    else:
-                                        color = "red"
-                                        arrow = "🔴"
-                                    
-                                    st.markdown(f"### {arrow} **{stock_name}**")
-                                    st.metric(
-                                        label="Live Price (LTP)",
-                                        value=f"₹{ltp:.2f}",
-                                        delta=f"{change_pct:.2f}%"
-                                    )
-                                    
-                                    # Simple live indicator
-                                    fig_live = go.Figure()
-                                    fig_live.add_trace(go.Indicator(
-                                        mode="number+delta",
-                                        value=ltp,
-                                        delta={'reference': price_data['close'], 'relative': False},
-                                        domain={'x': [0, 1], 'y': [0, 1]}
-                                    ))
-                                    
-                                    fig_live.update_layout(
-                                        height=150,
-                                        margin=dict(l=20, r=20, t=20, b=20),
-                                        paper_bgcolor=f'rgba({"0,255,0" if change >= 0 else "255,0,0"},0.1)'
-                                    )
-                                    
-                                    st.plotly_chart(fig_live, use_container_width=True, config={'displayModeBar': False})
-                                    
-                                    col_a, col_b = st.columns(2)
-                                    with col_a:
-                                        st.caption(f"📈 High: ₹{price_data['high']:.2f}")
-                                        st.caption(f"📊 Open: ₹{price_data['open']:.2f}")
-                                    with col_b:
-                                        st.caption(f"📉 Low: ₹{price_data['low']:.2f}")
-                                        st.caption(f"📦 Vol: {price_data['volume']:,.0f}")
-                                    
-                                    st.caption(f"🕒 Last updated: {datetime.now().strftime('%H:%M:%S')}")
-                                else:
-                                    st.warning(f"⚠️ {stock_name}")
-                                    st.caption("No data available")
-                
-                # Show summary
-                if stocks_with_data == 0:
-                    st.error("❌ No stocks returned live data")
-                    st.info("Market may be closed or session expired. Generate new session token.")
-                else:
-                    st.markdown("---")
-                    st.success(f"✅ {stocks_with_data}/{num_stocks} stocks showing live data")
-                    st.info(f"⏰ Next update in {interval_seconds} seconds... Page will auto-refresh")
-                
-                # Auto-refresh after interval
-                time.sleep(interval_seconds)
-                st.rerun()
+        # Dynamic columns based on number of stocks
+        if len(selected_watchlist) <= 2:
+            num_cols = 2
+        elif len(selected_watchlist) <= 4:
+            num_cols = 2
+        elif len(selected_watchlist) <= 9:
+            num_cols = 3
         else:
-            st.error("❌ Breeze API not connected. Cannot fetch live prices.")
-            st.info("Please ensure your API key is correct and Breeze session is active.")
-            
-            # Fallback to yfinance
-            st.warning("🔄 Using fallback data from Yahoo Finance (delayed data)")
-            
-            num_stocks = len(selected_watchlist)
-            if num_stocks <= 2:
-                num_cols = 2
-            elif num_stocks <= 4:
-                num_cols = 2
-            elif num_stocks <= 9:
-                num_cols = 3
-            else:
-                num_cols = 4
-            
-            num_rows = (num_stocks + num_cols - 1) // num_cols
-            
-            for row in range(num_rows):
-                cols = st.columns(num_cols)
-                for col_idx, col in enumerate(cols):
-                    stock_idx = row * num_cols + col_idx
+            num_cols = 2  # Changed from 4 to 2 for better spacing with 10 stocks
+        
+        num_stocks = len(selected_watchlist)
+        num_rows = (num_stocks + num_cols - 1) // num_cols
+        
+        for row in range(num_rows):
+            cols = st.columns(num_cols)
+            for col_idx, col in enumerate(cols):
+                stock_idx = row * num_cols + col_idx
+                
+                if stock_idx < num_stocks:
+                    stock_name = selected_watchlist[stock_idx]
+                    ticker = STOCK_TICKER_MAP.get(stock_name)
                     
-                    if stock_idx < num_stocks:
-                        stock_name = selected_watchlist[stock_idx]
-                        ticker = STOCK_TICKER_MAP.get(stock_name)
-                        
-                        with col:
-                            try:
-                                stock = yf.Ticker(ticker)
-                                df = stock.history(period="1d", interval="1m")
-                                
-                                if not df.empty and len(df) > 0:
-                                    current_price = df['Close'].iloc[-1]
-                                    prev_price = df['Close'].iloc[0]
-                                    price_change = current_price - prev_price
-                                    price_change_pct = (price_change / prev_price) * 100
-                                    
-                                    if price_change >= 0:
-                                        color = "green"
-                                        arrow = "🟢"
-                                    else:
-                                        color = "red"
-                                        arrow = "🔴"
-                                    
-                                    st.markdown(f"### {arrow} **{stock_name}**")
-                                    st.metric(
-                                        label="Price (Delayed)",
-                                        value=f"₹{current_price:.2f}",
-                                        delta=f"{price_change_pct:.2f}%"
-                                    )
-                                    
-                                    fig_mini = go.Figure()
-                                    fig_mini.add_trace(go.Scatter(
-                                        x=df.index,
-                                        y=df['Close'],
-                                        mode='lines',
-                                        line=dict(color=color, width=2),
-                                        fill='tozeroy',
-                                        fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)',
-                                        name='Price'
-                                    ))
-                                    
-                                    fig_mini.update_layout(
-                                        height=200,
-                                        margin=dict(l=10, r=10, t=10, b=10),
-                                        xaxis=dict(showgrid=True, showticklabels=False),
-                                        yaxis=dict(showgrid=True, showticklabels=True),
-                                        showlegend=False,
-                                        plot_bgcolor='rgba(0,0,0,0)',
-                                        paper_bgcolor='rgba(0,0,0,0)'
-                                    )
-                                    
-                                    st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
-                                    
-                                    col_a, col_b = st.columns(2)
-                                    with col_a:
-                                        st.caption(f"📈 High: ₹{df['High'].max():.2f}")
-                                    with col_b:
-                                        st.caption(f"📉 Low: ₹{df['Low'].min():.2f}")
-                                
-                                else:
-                                    st.warning(f"⚠️ No data for {stock_name}")
+                    with col:
+                        try:
+                            stock = yf.Ticker(ticker)
+                            df = stock.history(period=chart_period_multi, interval=chart_interval)
                             
-                            except Exception as e:
-                                st.error(f"❌ {stock_name}")
-                                st.caption(f"Error: {str(e)[:50]}")
+                            if not df.empty and len(df) > 0:
+                                current_price = df['Close'].iloc[-1]
+                                prev_price = df['Close'].iloc[0]
+                                price_change = current_price - prev_price
+                                price_change_pct = (price_change / prev_price) * 100
+                                
+                                if price_change >= 0:
+                                    color = "green"
+                                    arrow = "🟢"
+                                else:
+                                    color = "red"
+                                    arrow = "🔴"
+                                
+                                st.markdown(f"### {arrow} **{stock_name}**")
+                                st.metric(
+                                    label="Price",
+                                    value=f"₹{current_price:.2f}",
+                                    delta=f"{price_change_pct:.2f}%"
+                                )
+                                
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Scatter(
+                                    x=df.index,
+                                    y=df['Close'],
+                                    mode='lines',
+                                    line=dict(color=color, width=2),
+                                    fill='tozeroy',
+                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)',
+                                    name='Price'
+                                ))
+                                
+                                fig_mini.update_layout(
+                                    height=chart_height,
+                                    margin=dict(l=10, r=10, t=10, b=10),
+                                    xaxis=dict(showgrid=True, showticklabels=True, gridcolor='rgba(128,128,128,0.2)'),
+                                    yaxis=dict(showgrid=True, showticklabels=True, gridcolor='rgba(128,128,128,0.2)'),
+                                    showlegend=False,
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    hovermode='x unified'
+                                )
+                                
+                                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+                                
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.caption(f"📈 High: ₹{df['High'].max():.2f}")
+                                with col_b:
+                                    st.caption(f"📉 Low: ₹{df['Low'].min():.2f}")
+                                
+                                st.caption(f"📊 Vol: {df['Volume'].iloc[-1]:,.0f}")
+                            
+                            else:
+                                st.warning(f"⚠️ No data for {stock_name}")
+                        
+                        except Exception as e:
+                            st.error(f"❌ {stock_name}")
+                            st.caption(f"Error: {str(e)[:50]}")
         
         st.markdown("---")
-        st.caption("🔥 **Live Updates:** Breeze API provides real-time market data during trading hours (9:15 AM - 3:30 PM IST)")
-        st.caption("📊 **Auto-Refresh:** Page automatically refreshes based on your selected interval")
-        st.caption("⚡ **Performance:** Limit to 10-12 stocks for best performance with live updates")
-        st.caption("⚠ **Note:** Live data requires active Breeze session. Session expires after inactivity.")
+        st.caption("💡 **Tip:** Adjust the number of stocks, chart height, period, and interval using the controls above")
+        st.caption("📊 **Live Data:** Charts show real-time price movements. Click 'Refresh' to update all charts")
+        st.caption("⚡ **Performance:** For best performance, limit to 10 stocks or fewer")
 
 # --------------------------
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard with **Breeze API** live prices, **FinBERT AI** sentiment, and technical analysis")
+st.caption("💡 Dashboard with **FinBERT AI** sentiment analysis, technical indicators, and live price charts")
 st.caption("📊 Technical: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
-st.caption("🔴 **Live Data:** Powered by ICICI Direct Breeze API")
-st.caption("🤖 **AI Sentiment:** Powered by FinBERT (ProsusAI)")
-st.caption("⚠ **Disclaimer:** Educational purposes only. Not financial advice.")
+st.caption("🤖 Powered by FinBERT (ProsusAI) for financial sentiment analysis")
+st.caption("⚠ **Disclaimer:** For educational purposes only. Not financial advice.")
