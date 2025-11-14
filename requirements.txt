@@ -8,3 +8,4 @@ yfinance
 numpy
 transformers
 torch>=2.1.0
+breeze-connect>=1.0.0
