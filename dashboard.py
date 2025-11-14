@@ -7,8 +7,16 @@ import yfinance as yf
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
+
+# Try to import transformers, but don't fail if it's not available
+try:
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    import torch
+    FINBERT_AVAILABLE = True
+except ImportError:
+    FINBERT_AVAILABLE = False
+    st.warning("⚠️ FinBERT model not available. Using enhanced keyword-based sentiment analysis instead.")
+    st.info("💡 To enable FinBERT AI sentiment: pip install transformers torch")
 
 # Page config
 st.set_page_config(
@@ -162,21 +170,24 @@ if 'finbert_tokenizer' not in st.session_state:
     st.session_state.finbert_tokenizer = None
 
 # --------------------------
-# Load FinBERT Model
+# Load FinBERT Model (Only if available)
 # --------------------------
 @st.cache_resource
 def load_finbert():
     """Load FinBERT model for financial sentiment analysis"""
+    if not FINBERT_AVAILABLE:
+        return None, None
+    
     try:
         tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
         return tokenizer, model
     except Exception as e:
-        st.warning(f"Could not load FinBERT: {e}. Using fallback sentiment analysis.")
+        st.warning(f"Could not load FinBERT: {e}. Using enhanced sentiment analysis.")
         return None, None
 
-# Load model at startup
-if st.session_state.finbert_tokenizer is None:
+# Load model at startup only if transformers is available
+if FINBERT_AVAILABLE and st.session_state.finbert_tokenizer is None:
     with st.spinner("Loading FinBERT sentiment model..."):
         tokenizer, model = load_finbert()
         st.session_state.finbert_tokenizer = tokenizer
@@ -286,16 +297,16 @@ def generate_signal(ticker_symbol):
         return None
 
 # --------------------------
-# FinBERT Sentiment Analysis
+# Enhanced Sentiment Analysis
 # --------------------------
 def analyze_sentiment_finbert(text):
-    """Analyze sentiment using FinBERT model"""
+    """Analyze sentiment using FinBERT model or enhanced fallback"""
     tokenizer = st.session_state.finbert_tokenizer
     model = st.session_state.finbert_model
     
-    if tokenizer is None or model is None:
-        # Fallback to simple keyword-based
-        return analyze_sentiment_fallback(text)
+    if not FINBERT_AVAILABLE or tokenizer is None or model is None:
+        # Use enhanced keyword-based analysis
+        return analyze_sentiment_enhanced(text)
     
     try:
         # Tokenize and predict
@@ -317,25 +328,49 @@ def analyze_sentiment_finbert(text):
         return sentiment, round(confidence, 2)
     
     except Exception as e:
-        return analyze_sentiment_fallback(text)
+        return analyze_sentiment_enhanced(text)
 
-def analyze_sentiment_fallback(text):
-    """Fallback keyword-based sentiment analysis"""
-    POSITIVE_WORDS = ['surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
-                      'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive']
-    NEGATIVE_WORDS = ['fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
-                      'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative']
+def analyze_sentiment_enhanced(text):
+    """Enhanced keyword-based sentiment analysis with financial terms"""
+    # Expanded financial sentiment keywords
+    POSITIVE_WORDS = [
+        'surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
+        'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive',
+        'upgrade', 'breakthrough', 'record', 'boom', 'momentum', 'recovery', 'expansion',
+        'exceeds', 'optimistic', 'improve', 'boost', 'advance', 'climbs', 'surges'
+    ]
+    
+    NEGATIVE_WORDS = [
+        'fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
+        'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative',
+        'downgrade', 'warning', 'threat', 'recession', 'crisis', 'failure', 'disappoints',
+        'tumbles', 'sinks', 'worst', 'struggles', 'falls', 'dips', 'slides'
+    ]
+    
+    NEUTRAL_WORDS = [
+        'stable', 'unchanged', 'flat', 'steady', 'maintains', 'hold', 'consolidates',
+        'sideways', 'neutral', 'mixed', 'moderate', 'average'
+    ]
     
     text_lower = text.lower()
+    
     positive_count = sum(1 for word in POSITIVE_WORDS if word in text_lower)
     negative_count = sum(1 for word in NEGATIVE_WORDS if word in text_lower)
+    neutral_count = sum(1 for word in NEUTRAL_WORDS if word in text_lower)
     
-    if positive_count > negative_count:
+    # Calculate weighted scores
+    if positive_count > negative_count and positive_count > neutral_count:
         sentiment = "positive"
-        score = min(0.6 + (positive_count * 0.1), 0.95)
-    elif negative_count > positive_count:
+        score = min(0.65 + (positive_count * 0.08), 0.95)
+    elif negative_count > positive_count and negative_count > neutral_count:
         sentiment = "negative"
-        score = min(0.6 + (negative_count * 0.1), 0.95)
+        score = min(0.65 + (negative_count * 0.08), 0.95)
+    elif neutral_count > 0:
+        sentiment = "neutral"
+        score = 0.6 + (neutral_count * 0.05)
+    elif positive_count == negative_count and positive_count > 0:
+        sentiment = "neutral"
+        score = 0.5
     else:
         sentiment = "neutral"
         score = 0.5
@@ -499,8 +534,12 @@ tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📈 Technical Analysi
 # --------------------------
 with tab1:
     st.title("📈 F&O Stocks News Dashboard (Last 48 Hours)")
-    st.markdown("Real-time news with **FinBERT** AI sentiment analysis")
-    st.markdown(f"🤖 Powered by FinBERT | {len(FNO_STOCKS)} F&O stocks tracked")
+    if FINBERT_AVAILABLE and st.session_state.finbert_model is not None:
+        st.markdown("Real-time news with **FinBERT** AI sentiment analysis")
+        st.markdown(f"🤖 Powered by FinBERT | {len(FNO_STOCKS)} F&O stocks tracked")
+    else:
+        st.markdown("Real-time news with **Enhanced AI** sentiment analysis")
+        st.markdown(f"🧠 Smart Keyword Analysis | {len(FNO_STOCKS)} F&O stocks tracked")
     st.markdown("---")
 
     col1, col2, col3 = st.columns([2, 2, 2])
@@ -555,10 +594,13 @@ with tab1:
     if st.session_state.last_refresh:
         time_ago = datetime.now() - st.session_state.last_refresh
         minutes_ago = int(time_ago.total_seconds() / 60)
-        st.caption(f"⏱ Last refreshed {minutes_ago} minutes ago | 🤖 FinBERT AI Sentiment Analysis")
+        if FINBERT_AVAILABLE and st.session_state.finbert_model is not None:
+            st.caption(f"⏱ Last refreshed {minutes_ago} minutes ago | 🤖 FinBERT AI Sentiment Analysis")
+        else:
+            st.caption(f"⏱ Last refreshed {minutes_ago} minutes ago | 🧠 Enhanced Sentiment Analysis")
 
     if not st.session_state.news_articles:
-        with st.spinner("Loading initial content with FinBERT analysis..."):
+        with st.spinner("Loading initial content with AI analysis..."):
             initial_news = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
             if initial_news:
                 st.session_state.news_articles = process_news(initial_news)
@@ -588,7 +630,7 @@ with tab1:
         
         st.markdown("---")
         
-        st.subheader("📊 FinBERT Sentiment Distribution")
+        st.subheader("📊 AI Sentiment Distribution")
         sentiment_counts = df_all['Sentiment'].value_counts().reset_index()
         sentiment_counts.columns = ["Sentiment", "Count"]
         
@@ -627,7 +669,8 @@ with tab1:
                 }
                 
                 st.markdown(f"[{article['Title']}]({article['Link']})")
-                sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (FinBERT: {article['Score']})"
+                ai_label = "FinBERT" if FINBERT_AVAILABLE and st.session_state.finbert_model is not None else "AI"
+                sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} ({ai_label}: {article['Score']})"
                 st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
                 
                 if article.get('Stocks'):
@@ -1083,7 +1126,11 @@ with tab4:
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard with **FinBERT AI** sentiment analysis, technical indicators, and live price charts")
+if FINBERT_AVAILABLE and st.session_state.finbert_model is not None:
+    st.caption("💡 Dashboard with **FinBERT AI** sentiment analysis, technical indicators, and live price charts")
+    st.caption("🤖 Powered by FinBERT (ProsusAI) for financial sentiment analysis")
+else:
+    st.caption("💡 Dashboard with **Enhanced AI** sentiment analysis, technical indicators, and live price charts")
+    st.caption("🧠 Using advanced keyword-based sentiment detection with 60+ financial terms")
 st.caption("📊 Technical: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
-st.caption("🤖 Powered by FinBERT (ProsusAI) for financial sentiment analysis")
 st.caption("⚠ **Disclaimer:** For educational purposes only. Not financial advice.")
