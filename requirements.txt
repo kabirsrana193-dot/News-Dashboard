@@ -3,7 +3,7 @@ feedparser>=6.0.10
 pandas>=2.0.0
 plotly>=5.17.0
 numpy>=1.24.0
-transformers>=4.30.0
+transformers
 torch>=2.0.0
 breeze-connect>=1.0.0
 beautifulsoup4>=4.12.0
