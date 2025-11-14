@@ -23,7 +23,7 @@ st.set_page_config(
 # --------------------------
 BREEZE_API_KEY = "68`47N89970w1dH7u1s5347j8403f287"
 BREEZE_API_SECRET = "5v9k141093cf4361528$z24Q7(Yv2839"  # Add your API Secret here
-
+BREEZE_SESSION_TOKEN = "53693942"
 # Note: You need to generate session token through Breeze login
 # For now, we'll handle connection without session for testing
 
