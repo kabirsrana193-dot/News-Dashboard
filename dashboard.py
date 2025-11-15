@@ -1119,3 +1119,313 @@ with tab4:
             - **Sell**: Score -1 to -2 (Some bearish signals)
             - **Strong Sell**: Score ≤ -3 (Multiple bearish indicators)
             """)
+
+# --------------------------
+# TAB 5: STOCK CHARTS
+# --------------------------
+with tab5:
+    st.title("💹 Stock Price Charts")
+    st.markdown("Candlestick charts with SMA/EMA and technical indicators")
+    st.markdown("---")
+    
+    col1, col2 = st.columns([2, 2])
+    
+    with col1:
+        selected_chart_stock = st.selectbox(
+            "📊 Select Stock",
+            options=sorted(FNO_STOCKS),
+            key="chart_stock"
+        )
+    
+    with col2:
+        period = st.selectbox(
+            "📅 Time Period",
+            options=["1mo", "3mo", "6mo", "1y", "2y"],
+            index=2,
+            key="chart_period"
+        )
+    
+    ticker = STOCK_TICKER_MAP.get(selected_chart_stock)
+    
+    if ticker:
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period)
+            
+            if not df.empty and len(df) > 0:
+                # Calculate indicators with new periods
+                df['RSI'] = calculate_rsi(df['Close'])
+                df['MACD'], df['Signal'] = calculate_macd(df['Close'])
+                df['AO'] = calculate_ao(df['High'], df['Low'])
+                
+                # Updated SMA periods: 20, 50, 200
+                df['SMA_20'] = calculate_sma(df['Close'], 20)
+                df['SMA_50'] = calculate_sma(df['Close'], 50)
+                df['SMA_200'] = calculate_sma(df['Close'], 200)
+                
+                # Updated EMA periods: 9, 20, 50
+                df['EMA_9'] = calculate_ema(df['Close'], 9)
+                df['EMA_20'] = calculate_ema(df['Close'], 20)
+                df['EMA_50'] = calculate_ema(df['Close'], 50)
+                
+                # Current metrics
+                current_price = df['Close'].iloc[-1]
+                price_change = df['Close'].iloc[-1] - df['Close'].iloc[0]
+                price_change_pct = (price_change / df['Close'].iloc[0]) * 100
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Current Price", f"₹{current_price:.2f}")
+                with col2:
+                    st.metric("Change", f"₹{price_change:.2f}", f"{price_change_pct:.2f}%")
+                with col3:
+                    st.metric("High", f"₹{df['High'].max():.2f}")
+                with col4:
+                    st.metric("Low", f"₹{df['Low'].min():.2f}")
+                
+                st.markdown("---")
+                
+                # Candlestick Chart
+                fig = go.Figure(data=[go.Candlestick(
+                    x=df.index,
+                    open=df['Open'],
+                    high=df['High'],
+                    low=df['Low'],
+                    close=df['Close'],
+                    name='Price'
+                )])
+                
+                fig.update_layout(
+                    title=f"{selected_chart_stock} - Price Chart",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=500,
+                    xaxis_rangeslider_visible=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # SMA Chart with updated periods (20, 50, 200)
+                fig_sma = go.Figure()
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
+                                           line=dict(color='orange', dash='solid')))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
+                                           line=dict(color='red', dash='solid')))
+                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_200'], name='SMA 200', 
+                                           line=dict(color='purple', dash='solid')))
+                
+                fig_sma.update_layout(
+                    title="Simple Moving Averages (SMA 20, 50, 200)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_sma, use_container_width=True)
+                
+                # EMA Chart with updated periods (9, 20, 50)
+                fig_ema = go.Figure()
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
+                                           line=dict(color='blue', width=1)))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], name='EMA 9', 
+                                           line=dict(color='green', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
+                                           line=dict(color='yellow', dash='dash')))
+                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
+                                           line=dict(color='cyan', dash='dash')))
+                
+                fig_ema.update_layout(
+                    title="Exponential Moving Averages (EMA 9, 20, 50)",
+                    xaxis_title="Date",
+                    yaxis_title="Price (₹)",
+                    height=400
+                )
+                st.plotly_chart(fig_ema, use_container_width=True)
+                
+                # RSI Chart
+                fig_rsi = go.Figure()
+                fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='purple')))
+                fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought (70)")
+                fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold (30)")
+                fig_rsi.update_layout(
+                    title="RSI (Relative Strength Index)",
+                    xaxis_title="Date",
+                    yaxis_title="RSI",
+                    height=300
+                )
+                st.plotly_chart(fig_rsi, use_container_width=True)
+                
+                # MACD Chart
+                fig_macd = go.Figure()
+                fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='blue')))
+                fig_macd.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal', line=dict(color='orange')))
+                fig_macd.update_layout(
+                    title="MACD (Moving Average Convergence Divergence)",
+                    xaxis_title="Date",
+                    yaxis_title="MACD",
+                    height=300
+                )
+                st.plotly_chart(fig_macd, use_container_width=True)
+                
+                # AO Chart
+                fig_ao = go.Figure()
+                colors = ['green' if val > 0 else 'red' for val in df['AO']]
+                fig_ao.add_trace(go.Bar(x=df.index, y=df['AO'], name='AO', marker_color=colors))
+                fig_ao.update_layout(
+                    title="AO (Awesome Oscillator)",
+                    xaxis_title="Date",
+                    yaxis_title="AO",
+                    height=300
+                )
+                st.plotly_chart(fig_ao, use_container_width=True)
+                
+            else:
+                st.error(f"No data available for {selected_chart_stock}. The ticker might be incorrect or data is unavailable.")
+                st.info(f"Ticker used: {ticker}")
+        
+        except Exception as e:
+            st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
+            st.info(f"Ticker attempted: {ticker}")
+            st.warning("This stock might not have available data on Yahoo Finance. Try another stock.")
+
+# --------------------------
+# TAB 6: LIVE MULTI-CHART (4x4 GRID)
+# --------------------------
+with tab6:
+    st.title("📊 Live Multi-Chart Dashboard")
+    st.markdown("Monitor up to 16 stocks simultaneously with live intraday charts")
+    st.markdown("---")
+    
+    # Controls
+    col1, col2, col3 = st.columns([3, 2, 1])
+    
+    with col1:
+        st.markdown("**📋 Manage Your Watchlist (16 stocks max)**")
+        
+        # Multi-select for watchlist
+        selected_watchlist = st.multiselect(
+            "Select stocks to monitor",
+            options=sorted(FNO_STOCKS),
+            default=st.session_state.watchlist_stocks[:16],
+            max_selections=16,
+            key="watchlist_selector"
+        )
+        
+        if selected_watchlist != st.session_state.watchlist_stocks:
+            st.session_state.watchlist_stocks = selected_watchlist
+    
+    with col2:
+        chart_period_multi = st.selectbox(
+            "📅 Intraday Period",
+            options=["1d", "5d"],
+            index=0,
+            key="multi_chart_period"
+        )
+        
+        chart_interval = st.selectbox(
+            "⏱ Interval",
+            options=["1m", "5m", "15m", "30m", "60m"],
+            index=2,
+            key="multi_chart_interval"
+        )
+    
+    with col3:
+        if st.button("🔄 Refresh All", type="primary", use_container_width=True):
+            st.rerun()
+        
+        st.caption(f"**{len(selected_watchlist)}/16** stocks")
+    
+    st.markdown("---")
+    
+    if not selected_watchlist:
+        st.info("👆 Select stocks from the dropdown to start monitoring")
+    else:
+        # Calculate grid layout
+        num_stocks = len(selected_watchlist)
+        
+        # Create 4x4 grid
+        for row in range(4):
+            cols = st.columns(4)
+            for col_idx, col in enumerate(cols):
+                stock_idx = row * 4 + col_idx
+                
+                if stock_idx < num_stocks:
+                    stock_name = selected_watchlist[stock_idx]
+                    ticker = STOCK_TICKER_MAP.get(stock_name)
+                    
+                    with col:
+                        try:
+                            stock = yf.Ticker(ticker)
+                            df = stock.history(period=chart_period_multi, interval=chart_interval)
+                            
+                            if not df.empty and len(df) > 0:
+                                # Calculate metrics
+                                current_price = df['Close'].iloc[-1]
+                                prev_price = df['Close'].iloc[0]
+                                price_change = current_price - prev_price
+                                price_change_pct = (price_change / prev_price) * 100
+                                
+                                # Color based on change
+                                if price_change >= 0:
+                                    color = "green"
+                                    arrow = "🟢"
+                                else:
+                                    color = "red"
+                                    arrow = "🔴"
+                                
+                                # Mini card
+                                st.markdown(f"**{arrow} {stock_name}**")
+                                st.metric(
+                                    label="Price",
+                                    value=f"₹{current_price:.2f}",
+                                    delta=f"{price_change_pct:.2f}%"
+                                )
+                                
+                                # Mini chart
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Scatter(
+                                    x=df.index,
+                                    y=df['Close'],
+                                    mode='lines',
+                                    line=dict(color=color, width=2),
+                                    fill='tozeroy',
+                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)'
+                                ))
+                                
+                                fig_mini.update_layout(
+                                    height=200,
+                                    margin=dict(l=0, r=0, t=0, b=0),
+                                    xaxis=dict(showgrid=False, showticklabels=False),
+                                    yaxis=dict(showgrid=False, showticklabels=True),
+                                    showlegend=False,
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)'
+                                )
+                                
+                                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+                                
+                                # Quick stats
+                                st.caption(f"H: ₹{df['High'].max():.2f} | L: ₹{df['Low'].min():.2f}")
+                            
+                            else:
+                                st.warning(f"No data for {stock_name}")
+                        
+                        except Exception as e:
+                            st.error(f"{stock_name}: Error")
+                            st.caption(str(e)[:50])
+        
+        st.markdown("---")
+        st.caption("💡 **Tip:** Charts auto-update when you click 'Refresh All'. Add/remove stocks using the dropdown above.")
+        st.caption("📊 **Live Data:** Intraday charts show real-time price movements during market hours")
+        st.caption("⚠ **Note:** Data updates are subject to Yahoo Finance availability and delays")
+
+# --------------------------
+# FOOTER
+# --------------------------
+st.markdown("---")
+st.caption("💡 Dashboard shows news, Q2/Q3 FY26 earnings, technical analysis, and price charts for F&O stocks")
+st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
+st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
+st.caption("📅 FY26 = April 1, 2025 - March 31, 2026")
+st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
