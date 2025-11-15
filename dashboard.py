@@ -157,6 +157,14 @@ if 'last_earnings_fetch' not in st.session_state:
     st.session_state.last_earnings_fetch = None
 if 'technical_data' not in st.session_state:
     st.session_state.technical_data = []
+if 'watchlist_stocks' not in st.session_state:
+    # Default watchlist - top 16 F&O stocks
+    st.session_state.watchlist_stocks = [
+        "Reliance", "TCS", "HDFC Bank", "Infosys", 
+        "ICICI Bank", "Bharti Airtel", "ITC", "SBI",
+        "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank", "Axis Bank",
+        "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"
+    ]
 
 # --------------------------
 # Technical Analysis Functions
@@ -603,7 +611,7 @@ def fetch_q3_fy26_earnings():
 # --------------------------
 
 # Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📰 News Dashboard", "📅 Q3 FY25 Earnings", "📈 Technical Analysis", "💹 Stock Charts"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📅 Q3 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts", "📊 Live Multi-Chart"])
 
 # --------------------------
 # TAB 1: NEWS DASHBOARD
@@ -745,31 +753,25 @@ with tab1:
                 st.caption(f"Source: {article['Source']} | {article.get('Published', 'Recent')}")
                 st.markdown("---")
 
-    else:
-        if st.session_state.selected_stock == "All Stocks":
-            st.info("👆 Click 'Refresh News' to load content from the last 48 hours.")
-        else:
-            st.warning(f"No news found for {st.session_state.selected_stock}. Try refreshing!")
-
 # --------------------------
-# TAB 2: Q3 FY25 EARNINGS
+# TAB 2: Q2 FY26 EARNINGS
 # --------------------------
 with tab2:
-    st.title("📅 Q3 FY25 Earnings Calendar")
-    st.markdown("Q3 FY25 (Oct-Dec 2024) earnings announcements for F&O stocks")
+    st.title("📅 Q2 FY26 Earnings Calendar")
+    st.markdown("Q2 FY26 (Jul-Sep 2025) earnings announcements for F&O stocks")
     st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
     st.markdown("---")
     
     col1, col2 = st.columns([3, 3])
     
     with col1:
-        if st.button("🔄 Refresh Q3 FY25 Calendar", type="primary", use_container_width=True, key="refresh_earnings"):
-            with st.spinner("Fetching Q3 FY25 earnings..."):
+        if st.button("🔄 Refresh Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q2"):
+            with st.spinner("Fetching Q2 FY26 earnings..."):
                 st.cache_data.clear()
-                earnings = fetch_q3_fy25_earnings()
+                earnings = fetch_q2_fy26_earnings()
                 st.session_state.earnings_data = earnings
                 st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q3 FY25 results!")
+                st.success(f"✅ Loaded {len(earnings)} Q2 FY26 results!")
                 st.rerun()
     
     with col2:
@@ -779,37 +781,37 @@ with tab2:
             st.info(f"⏱ Last updated {minutes_ago} minutes ago")
     
     if not st.session_state.earnings_data:
-        with st.spinner("Loading Q3 FY25 calendar..."):
-            earnings = fetch_q3_fy25_earnings()
+        with st.spinner("Loading Q2 FY26 calendar..."):
+            earnings = fetch_q2_fy26_earnings()
             st.session_state.earnings_data = earnings
             st.session_state.last_earnings_fetch = datetime.now()
     
     if st.session_state.earnings_data:
         df_earnings = pd.DataFrame(st.session_state.earnings_data)
         
-        st.subheader("📊 Q3 FY25 Overview")
+        st.subheader("📊 Q2 FY26 Overview")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.metric("Total Companies", len(df_earnings))
         with col2:
-            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
-            st.metric("Reported", reported)
+            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
+            st.metric("Upcoming", scheduled)
         with col3:
-            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
-            st.metric("January Results", jan_dates)
+            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
+            st.metric("Already Reported", reported)
         with col4:
-            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
-            st.metric("February Results", feb_dates)
+            estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
+            st.metric("Estimated", estimated)
         
         st.markdown("---")
         
-        # Highlight key reporting dates
-        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2025)")
-        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2025', '16-Jan-2025', '17-Jan-2025'])]
-        if not key_df.empty:
+        # Highlight upcoming Nov 13-14 results
+        st.subheader("🔥 Upcoming This Week (Nov 13-14, 2025)")
+        upcoming_df = df_earnings[df_earnings['Expected Date'].isin(['13-Nov-2025', '14-Nov-2025'])]
+        if not upcoming_df.empty:
             st.dataframe(
-                key_df,
+                upcoming_df,
                 use_container_width=True,
                 height=300,
                 column_config={
@@ -823,7 +825,7 @@ with tab2:
         
         st.markdown("---")
         
-        search_earnings = st.text_input("🔍 Search by Company Name", "")
+        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q2")
         
         if search_earnings:
             mask = df_earnings['Company'].str.contains(search_earnings, case=False)
@@ -848,20 +850,121 @@ with tab2:
         
         csv_earnings = filtered_earnings.to_csv(index=False)
         st.download_button(
-            label="📥 Download Q3 FY25 Calendar (CSV)",
+            label="📥 Download Q2 FY26 Calendar (CSV)",
             data=csv_earnings,
-            file_name=f"q3_fy25_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
+            file_name=f"q2_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="download_q2"
         )
         
-        st.info("💡 *Note*: Q3 FY25 covers Oct-Dec 2024. Results announced in Jan-Feb 2025.")
-    else:
-        st.info("👆 Click 'Refresh Q3 FY25 Calendar' to load results.")
-
 # --------------------------
-# TAB 3: TECHNICAL ANALYSIS
+# TAB 3: Q3 FY26 EARNINGS
 # --------------------------
 with tab3:
+    st.title("📅 Q3 FY26 Earnings Calendar")
+    st.markdown("Q3 FY26 (Oct-Dec 2025) earnings announcements for F&O stocks")
+    st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
+    st.markdown("---")
+    
+    col1, col2 = st.columns([3, 3])
+    
+    with col1:
+        if st.button("🔄 Refresh Q3 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q3"):
+            with st.spinner("Fetching Q3 FY26 earnings..."):
+                st.cache_data.clear()
+                earnings = fetch_q3_fy26_earnings()
+                st.session_state.earnings_data_q3 = earnings
+                st.session_state.last_earnings_fetch_q3 = datetime.now()
+                st.success(f"✅ Loaded {len(earnings)} Q3 FY26 results!")
+                st.rerun()
+    
+    with col2:
+        if 'last_earnings_fetch_q3' in st.session_state and st.session_state.last_earnings_fetch_q3:
+            time_ago = datetime.now() - st.session_state.last_earnings_fetch_q3
+            minutes_ago = int(time_ago.total_seconds() / 60)
+            st.info(f"⏱ Last updated {minutes_ago} minutes ago")
+    
+    if 'earnings_data_q3' not in st.session_state:
+        with st.spinner("Loading Q3 FY26 calendar..."):
+            earnings = fetch_q3_fy26_earnings()
+            st.session_state.earnings_data_q3 = earnings
+            st.session_state.last_earnings_fetch_q3 = datetime.now()
+    
+    if st.session_state.earnings_data_q3:
+        df_earnings = pd.DataFrame(st.session_state.earnings_data_q3)
+        
+        st.subheader("📊 Q3 FY26 Overview")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Companies", len(df_earnings))
+        with col2:
+            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
+            st.metric("Scheduled", scheduled)
+        with col3:
+            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
+            st.metric("January Results", jan_dates)
+        with col4:
+            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
+            st.metric("February Results", feb_dates)
+        
+        st.markdown("---")
+        
+        # Highlight key reporting dates
+        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2026)")
+        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2026', '16-Jan-2026', '17-Jan-2026'])]
+        if not key_df.empty:
+            st.dataframe(
+                key_df,
+                use_container_width=True,
+                height=300,
+                column_config={
+                    "Company": st.column_config.TextColumn("Company", width="medium"),
+                    "Quarter": st.column_config.TextColumn("Quarter", width="small"),
+                    "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                    "Day": st.column_config.TextColumn("Day", width="small"),
+                    "Status": st.column_config.TextColumn("Status", width="small")
+                }
+            )
+        
+        st.markdown("---")
+        
+        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q3")
+        
+        if search_earnings:
+            mask = df_earnings['Company'].str.contains(search_earnings, case=False)
+            filtered_earnings = df_earnings[mask]
+        else:
+            filtered_earnings = df_earnings
+        
+        st.info(f"Showing {len(filtered_earnings)} companies")
+        
+        st.dataframe(
+            filtered_earnings,
+            use_container_width=True,
+            height=600,
+            column_config={
+                "Company": st.column_config.TextColumn("Company", width="medium"),
+                "Quarter": st.column_config.TextColumn("Quarter", width="small"),
+                "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
+                "Day": st.column_config.TextColumn("Day", width="small"),
+                "Status": st.column_config.TextColumn("Status", width="small")
+            }
+        )
+        
+        csv_earnings = filtered_earnings.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Q3 FY26 Calendar (CSV)",
+            data=csv_earnings,
+            file_name=f"q3_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            key="download_q3"
+        )
+        
+# --------------------------
+# TAB 4: TECHNICAL ANALYSIS
+# --------------------------
+with tab4:
     st.title("📈 Technical Analysis - Buy/Sell Signals")
     st.markdown("RSI, MACD, and AO analysis for F&O stocks")
     st.markdown("---")
@@ -1014,13 +1117,10 @@ with tab3:
             - **Buy**: Score 1-2 (Some bullish signals)
             - **Hold**: Score 0 (Neutral)
             - **Sell**: Score -1 to -2 (Some bearish signals)
-            - **Strong Sell**: Score ≤ -3 (Multiple bearish indicators)
-            """)
-
 # --------------------------
-# TAB 4: STOCK CHARTS
+# TAB 5: STOCK CHARTS
 # --------------------------
-with tab4:
+with tab5:
     st.title("💹 Stock Price Charts")
     st.markdown("Candlestick charts with SMA/EMA and technical indicators")
     st.markdown("---")
@@ -1185,14 +1285,143 @@ with tab4:
             st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
             st.info(f"Ticker attempted: {ticker}")
             st.warning("This stock might not have available data on Yahoo Finance. Try another stock.")
+# --------------------------
+# TAB 6: LIVE MULTI-CHART (4x4 GRID)
+# --------------------------
+with tab6:
+    st.title("📊 Live Multi-Chart Dashboard")
+    st.markdown("Monitor up to 16 stocks simultaneously with live intraday charts")
+    st.markdown("---")
+    
+    # Controls
+    col1, col2, col3 = st.columns([3, 2, 1])
+    
+    with col1:
+        st.markdown("**📋 Manage Your Watchlist (16 stocks max)**")
+        
+        # Multi-select for watchlist
+        selected_watchlist = st.multiselect(
+            "Select stocks to monitor",
+            options=sorted(FNO_STOCKS),
+            default=st.session_state.watchlist_stocks[:16],
+            max_selections=16,
+            key="watchlist_selector"
+        )
+        
+        if selected_watchlist != st.session_state.watchlist_stocks:
+            st.session_state.watchlist_stocks = selected_watchlist
+    
+    with col2:
+        chart_period_multi = st.selectbox(
+            "📅 Intraday Period",
+            options=["1d", "5d"],
+            index=0,
+            key="multi_chart_period"
+        )
+        
+        chart_interval = st.selectbox(
+            "⏱ Interval",
+            options=["1m", "5m", "15m", "30m", "60m"],
+            index=2,
+            key="multi_chart_interval"
+        )
+    
+    with col3:
+        if st.button("🔄 Refresh All", type="primary", use_container_width=True):
+            st.rerun()
+        
+        st.caption(f"**{len(selected_watchlist)}/16** stocks")
+    
+    st.markdown("---")
+    
+    if not selected_watchlist:
+        st.info("👆 Select stocks from the dropdown to start monitoring")
     else:
-        st.warning(f"Ticker symbol not found for {selected_chart_stock}. Please check the stock name.")
+        # Calculate grid layout
+        num_stocks = len(selected_watchlist)
+        
+        # Create 4x4 grid
+        for row in range(4):
+            cols = st.columns(4)
+            for col_idx, col in enumerate(cols):
+                stock_idx = row * 4 + col_idx
+                
+                if stock_idx < num_stocks:
+                    stock_name = selected_watchlist[stock_idx]
+                    ticker = STOCK_TICKER_MAP.get(stock_name)
+                    
+                    with col:
+                        try:
+                            stock = yf.Ticker(ticker)
+                            df = stock.history(period=chart_period_multi, interval=chart_interval)
+                            
+                            if not df.empty and len(df) > 0:
+                                # Calculate metrics
+                                current_price = df['Close'].iloc[-1]
+                                prev_price = df['Close'].iloc[0]
+                                price_change = current_price - prev_price
+                                price_change_pct = (price_change / prev_price) * 100
+                                
+                                # Color based on change
+                                if price_change >= 0:
+                                    color = "green"
+                                    arrow = "🟢"
+                                else:
+                                    color = "red"
+                                    arrow = "🔴"
+                                
+                                # Mini card
+                                st.markdown(f"**{arrow} {stock_name}**")
+                                st.metric(
+                                    label="Price",
+                                    value=f"₹{current_price:.2f}",
+                                    delta=f"{price_change_pct:.2f}%"
+                                )
+                                
+                                # Mini chart
+                                fig_mini = go.Figure()
+                                fig_mini.add_trace(go.Scatter(
+                                    x=df.index,
+                                    y=df['Close'],
+                                    mode='lines',
+                                    line=dict(color=color, width=2),
+                                    fill='tozeroy',
+                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)'
+                                ))
+                                
+                                fig_mini.update_layout(
+                                    height=200,
+                                    margin=dict(l=0, r=0, t=0, b=0),
+                                    xaxis=dict(showgrid=False, showticklabels=False),
+                                    yaxis=dict(showgrid=False, showticklabels=True),
+                                    showlegend=False,
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)'
+                                )
+                                
+                                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
+                                
+                                # Quick stats
+                                st.caption(f"H: ₹{df['High'].max():.2f} | L: ₹{df['Low'].min():.2f}")
+                            
+                            else:
+                                st.warning(f"No data for {stock_name}")
+                        
+                        except Exception as e:
+                            st.error(f"{stock_name}: Error")
+                            st.caption(str(e)[:50])
+        
+        st.markdown("---")
+        st.caption("💡 **Tip:** Charts auto-update when you click 'Refresh All'. Add/remove stocks using the dropdown above.")
+        st.caption("📊 **Live Data:** Intraday charts show real-time price movements during market hours")
+        st.caption("⚠ **Note:** Data updates are subject to Yahoo Finance availability and delays")
 
 # --------------------------
 # FOOTER
 # --------------------------
 st.markdown("---")
-st.caption("💡 Dashboard shows news, Q3 FY25 earnings, technical analysis, and price charts for F&O stocks")
+st.caption("💡 Dashboard shows news, Q2/Q3 FY26 earnings, technical analysis, and price charts for F&O stocks")
 st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
 st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
+st.caption("📅 FY26 = April 1, 2025 - March 31, 2026")
 st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
