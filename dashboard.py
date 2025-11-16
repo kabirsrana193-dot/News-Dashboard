@@ -19,7 +19,7 @@ st.set_page_config(
 # Breeze Configuration
 # --------------------------
 app_key = "68`47N89970w1dH7u1s5347j8403f287"
-secret_key = "5v9k141093cf4361528$z24Q7(Yv2839"
+secret_key = "X1RO00b38m4102g26a9o=k5u869$2337"
 session_token = "53705299"
 
 # --------------------------
