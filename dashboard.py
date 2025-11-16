@@ -1,1431 +1,799 @@
 import streamlit as st
 import feedparser
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
-import requests
-from bs4 import BeautifulSoup
-import yfinance as yf
-import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from breeze_connect import BreezeConnect
 
 # Page config
 st.set_page_config(
-    page_title="Nifty F&O Dashboard",
+    page_title="F&O Dashboard - Breeze (Nifty 200)",
     page_icon="📈",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # --------------------------
-# Config - All F&O Stocks in India
+# Breeze Configuration
+# --------------------------
+app_key = "68`47N89970w1dH7u1s5347j8403f287"
+secret_key = "5v9k141093cf4361528$z24Q7(Yv2839"
+session_token = "53705299"
+
+# --------------------------
+# Nifty 200 Stocks
 # --------------------------
 FNO_STOCKS = [
-    "Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel", "ITC",
-    "State Bank of India", "SBI", "Hindustan Unilever", "HUL", "Bajaj Finance", 
-    "Kotak Mahindra Bank", "Axis Bank", "Larsen & Toubro", "L&T", "Asian Paints", 
-    "Maruti Suzuki", "Titan", "Sun Pharma", "HCL Tech", "Nestle", "Adani Enterprises",
-    "Tata Motors", "Wipro", "Power Grid", "NTPC", "Bajaj Finserv", "Tata Steel",
-    "Hindalco", "IndusInd Bank", "Mahindra & Mahindra", "M&M", "Coal India",
-    "JSW Steel", "Tata Consumer", "Eicher Motors", "BPCL", "Tech Mahindra",
-    "Dr Reddy", "Cipla", "UPL", "Havells", "Pidilite", "Britannia",
-    "Divi's Lab", "SBI Life", "HDFC Life", "Berger Paints", "Bandhan Bank",
-    "Adani Ports", "ONGC", "IOC", "Vedanta", "Godrej Consumer", "Bajaj Auto", 
-    "TVS Motor", "Hero MotoCorp", "Tata Power", "GAIL", "Ambuja Cement",
-    "ACC", "UltraTech", "Zomato", "Paytm", "Trent", "Avenue Supermarts", "DMart",
-    "Page Industries", "MRF", "Apollo Hospitals", "Lupin", "Torrent Pharma", 
-    "Biocon", "Aurobindo Pharma", "ICICI Lombard", "ICICI Prudential", 
-    "PNB", "Bank of Baroda", "Canara Bank", "Union Bank", "Indian Bank", 
-    "IDFC First", "Federal Bank", "AU Small Finance", "Yes Bank", "DLF", 
-    "Prestige Estates", "Godrej Properties", "Oberoi Realty", "InterGlobe Aviation",
-    "IndGo", "Adani Green", "Adani Total Gas", "Adani Power", "Grasim",
-    "Shree Cement", "Ashok Leyland", "Bosch", "ABB", "Siemens", "Voltas",
-    "Crompton", "Dixon", "Polycab", "Motherson Sumi", "Bharat Electronics", "BEL",
-    "HAL", "Bharat Forge", "Cummins", "Exide", "Amara Raja", "Balkrishna Industries",
-    "Apollo Tyres", "MRF Tyres", "CEAT", "JK Tyre", "Escorts", "Mahindra CIE",
-    "Sona BLW", "Samvardhana Motherson", "Muthoot Finance", "Shriram Finance",
-    "Cholamandalam", "LIC Housing Finance", "PFC", "REC", "IRFC", "Jindal Steel",
-    "Hindalco Industries", "National Aluminium", "NALCO", "Hindustan Zinc",
-    "Vedanta Limited", "NMDC", "SAIL", "Tata Chemicals", "PI Industries",
-    "Aarti Industries", "Deepak Nitrite", "SRF", "Balrampur Chini", "Dalmia Bharat",
-    "India Cements", "JK Cement", "Gujarat Ambuja", "Container Corporation",
-    "Concor", "IRCTC", "Rail Vikas Nigam", "RVNL", "NMDC Steel", "Max Healthcare",
-    "Fortis Healthcare", "Narayana Hrudayalaya", "Laurus Labs", "Granules India",
-    "Natco Pharma", "Glenmark", "Cadila Healthcare", "Mankind Pharma", 
-    "Zydus Lifesciences", "PVR Inox", "IEX", "Adani Wilmar", "Marico",
-    "Dabur", "Colgate", "Hindustan Foods", "Varun Beverages", "Tata Elxsi",
-    "Coforge", "Persistent Systems", "L&T Technology", "Mphasis", "Mindtree",
-    "LTIMindtree", "KPIT Technologies", "Info Edge", "Naukri", "Zomato Limited"
+    "Reliance Industries", "TCS", "HDFC Bank", "Infosys", "ICICI Bank",
+    "Bharti Airtel", "ITC", "State Bank of India", "HCL Technologies", "Axis Bank",
+    "Kotak Mahindra Bank", "Larsen & Toubro", "Bajaj Finance", "Asian Paints", "Maruti Suzuki",
+    "Titan Company", "Sun Pharma", "Wipro", "Ultratech Cement", "Tata Motors",
+    "Adani Ports", "Adani Enterprises", "Tech Mahindra", "Power Grid", "NTPC",
+    "Coal India", "Tata Steel", "Bajaj Finserv", "Hero MotoCorp", "IndusInd Bank",
+    "Mahindra & Mahindra", "Grasim Industries", "Hindalco", "JSW Steel", "SBI Life",
+    "ICICI Lombard", "Bajaj Auto", "HDFC Life", "Adani Green", "Shree Cement",
+    "Eicher Motors", "UPL", "Tata Consumer", "Britannia", "Nestle India",
+    "Hindustan Unilever", "Cipla", "Dr Reddy's", "Divi's Labs", "Apollo Hospitals",
+    "IOC", "BPCL", "ONGC", "Gail India", "Pidilite",
+    "Berger Paints", "Havells", "Godrej Consumer", "Dabur", "Marico",
+    "Colgate", "United Spirits", "Varun Beverages", "Zomato", "Paytm",
+    "LIC", "SBI Cards", "Cholamandalam", "Muthoot Finance", "Shriram Finance",
+    "Bosch", "ABB India", "Siemens", "Bharat Electronics", "BHEL",
+    "HAL", "L&T Technology", "Persistent", "Coforge", "Mphasis",
+    "LTIMindtree", "Oracle Financial", "DMart", "Trent", "Jubilant Food",
+    "PVR Inox", "IndiGo", "Indian Hotels", "Oberoi Realty", "DLF",
+    "Godrej Properties", "Prestige Estates", "Phoenix Mills", "Voltas", "Blue Star",
+    "Crompton Greaves", "Polycab", "Dixon Tech", "Amber Enterprises", "Tube Investments",
+    "Motherson Sumi", "Bharat Forge", "Balkrishna Ind", "Apollo Tyres", "MRF",
+    "Ashok Leyland", "TVS Motor", "Escorts Kubota", "Bajaj Holdings", "ICICI Prudential",
+    "Max Financial", "Star Health", "GIC", "New India Assurance", "Bank of Baroda",
+    "PNB", "Canara Bank", "Union Bank", "Indian Bank", "Bank of India",
+    "Central Bank", "IDBI Bank", "AU Small Finance", "Bandhan Bank", "Federal Bank",
+    "IDFC First Bank", "RBL Bank", "Yes Bank", "City Union Bank", "Karur Vysya Bank",
+    "Manappuram Finance", "PNB Housing", "Can Fin Homes", "Aarti Industries", "Deepak Nitrite",
+    "Navin Fluorine", "PI Industries", "SRF", "Atul Ltd", "Vinati Organics",
+    "Gujarat Gas", "Petronet LNG", "IGL", "MGL", "Adani Total Gas",
+    "Adani Transmission", "Adani Power", "JSW Energy", "Tata Power", "Torrent Power",
+    "CESC", "Alkem Labs", "Lupin", "Aurobindo Pharma", "Biocon",
+    "Torrent Pharma", "Zydus Life", "Glenmark", "Ipca Labs", "Natco Pharma",
+    "Mankind Pharma", "Laurus Labs", "Max Healthcare", "Fortis Healthcare", "Narayana Health",
+    "Metropolis", "Dr Lal PathLabs", "Vedanta", "Jindal Steel", "NMDC",
+    "SAIL", "Hindustan Zinc", "NALCO", "Astral", "Supreme Industries",
+    "Finolex Cables", "KEI Industries", "Ahluwalia Contracts", "NCC", "PNC Infratech",
+    "KEC International", "Kalpataru Projects", "IRB Infrastructure", "NBCC", "Container Corp",
+    "Concor", "IRCTC", "Mazagon Dock", "BEML", "Cochin Shipyard",
+    "NMDC Steel", "Redington", "V-Guard", "Cera Sanitary", "Kajaria Ceramics",
+    "Somany Ceramics", "Orient Electric", "Crompton Consumer", "Symphony", "Whirlpool",
+    "IFB Industries", "Butterfly Gandhimathi", "TTK Prestige", "Bajaj Electricals", "GMR Airports",
+    "AAI", "Gateway Distriparks", "Allcargo Logistics", "VRL Logistics", "TCI Express",
+    "Blue Dart", "Gati", "Mahindra Logistics", "KPIT Technologies", "Tata Elxsi",
+    "Cyient", "Zensar Tech", "Sonata Software", "Mastek", "Happiest Minds"
 ]
 
-# Stock ticker mapping - Comprehensive
-STOCK_TICKER_MAP = {
-    "Reliance": "RELIANCE.NS", "TCS": "TCS.NS", "HDFC Bank": "HDFCBANK.NS",
-    "Infosys": "INFY.NS", "ICICI Bank": "ICICIBANK.NS", "Bharti Airtel": "BHARTIARTL.NS",
-    "ITC": "ITC.NS", "State Bank of India": "SBIN.NS", "SBI": "SBIN.NS",
-    "Hindustan Unilever": "HINDUNILVR.NS", "HUL": "HINDUNILVR.NS",
-    "Bajaj Finance": "BAJFINANCE.NS", "Kotak Mahindra Bank": "KOTAKBANK.NS",
-    "Axis Bank": "AXISBANK.NS", "Larsen & Toubro": "LT.NS", "L&T": "LT.NS",
-    "Asian Paints": "ASIANPAINT.NS", "Maruti Suzuki": "MARUTI.NS",
-    "Titan": "TITAN.NS", "Sun Pharma": "SUNPHARMA.NS", "HCL Tech": "HCLTECH.NS",
-    "Nestle": "NESTLEIND.NS", "Adani Enterprises": "ADANIENT.NS", 
-    "Tata Motors": "TATAMOTORS.NS", "Wipro": "WIPRO.NS", "Power Grid": "POWERGRID.NS", 
-    "NTPC": "NTPC.NS", "Bajaj Finserv": "BAJAJFINSV.NS", "Tata Steel": "TATASTEEL.NS",
-    "Grasim": "GRASIM.NS", "Hindalco": "HINDALCO.NS", "IndusInd Bank": "INDUSINDBK.NS",
-    "Mahindra & Mahindra": "M&M.NS", "M&M": "M&M.NS", "Coal India": "COALINDIA.NS",
-    "JSW Steel": "JSWSTEEL.NS", "Tata Consumer": "TATACONSUM.NS",
-    "Eicher Motors": "EICHERMOT.NS", "BPCL": "BPCL.NS", "Tech Mahindra": "TECHM.NS",
-    "Dr Reddy": "DRREDDY.NS", "Cipla": "CIPLA.NS", "UPL": "UPL.NS",
-    "Shree Cement": "SHREECEM.NS", "Havells": "HAVELLS.NS", "Pidilite": "PIDILITIND.NS",
-    "Britannia": "BRITANNIA.NS", "Divi's Lab": "DIVISLAB.NS", "ONGC": "ONGC.NS",
-    "IOC": "IOC.NS", "Vedanta": "VEDL.NS", "Bajaj Auto": "BAJAJ-AUTO.NS",
-    "SBI Life": "SBILIFE.NS", "HDFC Life": "HDFCLIFE.NS", "Adani Ports": "ADANIPORTS.NS",
-    "UltraTech": "ULTRACEMCO.NS", "Hero MotoCorp": "HEROMOTOCO.NS", "Tata Power": "TATAPOWER.NS",
-    "GAIL": "GAIL.NS", "Zomato": "ZOMATO.NS", "Paytm": "PAYTM.NS", "Trent": "TRENT.NS",
-    "Avenue Supermarts": "DMART.NS", "DMart": "DMART.NS", "MRF": "MRF.NS",
-    "Apollo Hospitals": "APOLLOHOSP.NS", "Lupin": "LUPIN.NS", "Torrent Pharma": "TORNTPHARM.NS",
-    "Biocon": "BIOCON.NS", "Aurobindo Pharma": "AUROPHARMA.NS", "DLF": "DLF.NS",
-    "Yes Bank": "YESBANK.NS", "Bank of Baroda": "BANKBARODA.NS", "PNB": "PNB.NS",
-    "Canara Bank": "CANBK.NS", "Union Bank": "UNIONBANK.NS", "Indian Bank": "INDIANB.NS",
-    "Federal Bank": "FEDERALBNK.NS", "IDFC First": "IDFCFIRSTB.NS", 
-    "AU Small Finance": "AUBANK.NS", "InterGlobe Aviation": "INDIGO.NS", "IndGo": "INDIGO.NS",
-    "Adani Green": "ADANIGREEN.NS", "Adani Total Gas": "ATGL.NS", "Adani Power": "ADANIPOWER.NS",
-    "Godrej Consumer": "GODREJCP.NS", "TVS Motor": "TVSMOTOR.NS", "ACC": "ACC.NS",
-    "Ambuja Cement": "AMBUJACEM.NS", "Berger Paints": "BERGEPAINT.NS", 
-    "Bandhan Bank": "BANDHANBNK.NS", "Ashok Leyland": "ASHOKLEY.NS",
-    "Bosch": "BOSCHLTD.NS", "ABB": "ABB.NS", "Siemens": "SIEMENS.NS",
-    "Bharat Electronics": "BEL.NS", "BEL": "BEL.NS", "HAL": "HAL.NS",
-    "Dixon": "DIXON.NS", "Polycab": "POLYCAB.NS", "Voltas": "VOLTAS.NS",
-    "Crompton": "CROMPTON.NS", "Motherson Sumi": "MOTHERSON.NS",
-    "Shriram Finance": "SHRIRAMFIN.NS", "LIC Housing Finance": "LICHSGFIN.NS",
-    "PFC": "PFC.NS", "REC": "RECLTD.NS", "Jindal Steel": "JINDALSTEL.NS",
-    "NMDC": "NMDC.NS", "SAIL": "SAIL.NS", "PI Industries": "PIIND.NS",
-    "SRF": "SRF.NS", "Container Corporation": "CONCOR.NS", "Concor": "CONCOR.NS",
-    "IRCTC": "IRCTC.NS", "Max Healthcare": "MAXHEALTH.NS", "Fortis Healthcare": "FORTIS.NS",
-    "Mankind Pharma": "MANKIND.NS", "Zydus Lifesciences": "ZYDUSLIFE.NS",
-    "IEX": "IEX.NS", "Adani Wilmar": "AWL.NS", "Marico": "MARICO.NS",
-    "Dabur": "DABUR.NS", "Colgate": "COLPAL.NS", "Varun Beverages": "VBL.NS",
-    "Tata Elxsi": "TATAELXSI.NS", "Coforge": "COFORGE.NS", "Persistent Systems": "PERSISTENT.NS",
-    "L&T Technology": "LTTS.NS", "Mphasis": "MPHASIS.NS", "LTIMindtree": "LTIM.NS",
-    "Info Edge": "NAUKRI.NS", "Naukri": "NAUKRI.NS", "Page Industries": "PAGEIND.NS",
-    "ICICI Lombard": "ICICIGI.NS", "ICICI Prudential": "ICICIPRULI.NS",
-    "Prestige Estates": "PRESTIGE.NS", "Godrej Properties": "GODREJPROP.NS",
-    "Oberoi Realty": "OBEROIRLTY.NS", "Bharat Forge": "BHARATFORG.NS",
-    "Cummins": "CUMMINSIND.NS", "Apollo Tyres": "APOLLOTYRE.NS", "Escorts": "ESCORTS.NS",
-    "Muthoot Finance": "MUTHOOTFIN.NS", "Cholamandalam": "CHOLAFIN.NS",
-    "National Aluminium": "NATIONALUM.NS", "NALCO": "NATIONALUM.NS",
-    "Hindustan Zinc": "HINDZINC.NS", "Vedanta Limited": "VEDL.NS",
-    "Tata Chemicals": "TATACHEM.NS", "Balrampur Chini": "BALRAMCHIN.NS",
-    "Dalmia Bharat": "DALBHARAT.NS", "JK Cement": "JKCEMENT.NS",
-    "Narayana Hrudayalaya": "NH.NS", "Laurus Labs": "LAURUSLABS.NS",
-    "Granules India": "GRANULES.NS", "Natco Pharma": "NATCOPHARM.NS",
-    "Glenmark": "GLENMARK.NS", "Cadila Healthcare": "ZYDUSLIFE.NS",
-    "PVR Inox": "PVRINOX.NS", "Deepak Nitrite": "DEEPAKNTR.NS",
-    "Aarti Industries": "AARTIIND.NS", "India Cements": "INDIACEM.NS",
-    "Exide": "EXIDEIND.NS", "Amara Raja": "AMARAJABAT.NS",
-    "Balkrishna Industries": "BALKRISIND.NS", "CEAT": "CEAT.NS",
-    "JK Tyre": "JKTYRE.NS", "Sona BLW": "SONACOMS.NS",
-    "Samvardhana Motherson": "MOTHERSON.NS", "IRFC": "IRFC.NS",
-    "Rail Vikas Nigam": "RVNL.NS", "RVNL": "RVNL.NS",
-    "KPIT Technologies": "KPITTECH.NS", "Gujarat Ambuja": "AMBUJACEM.NS"
+# Stock code mapping (6-letter ICICI Breeze codes)
+STOCK_CODE_MAP = {
+    "Reliance Industries": "RELIND",
+    "TCS": "TCS",
+    "HDFC Bank": "HDFBAN",
+    "Infosys": "INFTEC",
+    "ICICI Bank": "ICIBAN",
+    "Bharti Airtel": "BHAAIR",
+    "ITC": "ITC",
+    "State Bank of India": "STABAN",
+    "HCL Technologies": "HCLTEC",
+    "Axis Bank": "AXIBAN",
+    "Kotak Mahindra Bank": "KOTMAH",
+    "Larsen & Toubro": "LARTOU",
+    "Bajaj Finance": "BAJFI",
+    "Asian Paints": "ASIPAI",
+    "Maruti Suzuki": "MARUTI",
+    "Titan Company": "TITIND",
+    "Sun Pharma": "SUNPHA",
+    "Wipro": "WIPRO",
+    "Ultratech Cement": "ULTCEM",
+    "Tata Motors": "TATMOT",
+    "Adani Ports": "ADAPOR",
+    "Adani Enterprises": "ADAENT",
+    "Tech Mahindra": "TECMAH",
+    "Power Grid": "POWGRI",
+    "NTPC": "NTPC",
+    "Coal India": "COALIN",
+    "Tata Steel": "TATSTE",
+    "Bajaj Finserv": "BAFINS",
+    "Hero MotoCorp": "HERHON",
+    "IndusInd Bank": "INDBA",
+    "Mahindra & Mahindra": "MAHMAH",
+    "Grasim Industries": "GRASIM",
+    "Hindalco": "HINDAL",
+    "JSW Steel": "JSWSTE",
+    "SBI Life": "SBILIF",
+    "ICICI Lombard": "ICILOM",
+    "Bajaj Auto": "BAAUTO",
+    "HDFC Life": "HDFSTA",
+    "Adani Green": "ADAGRE",
+    "Shree Cement": "SHRCEM",
+    "Eicher Motors": "EICHER",
+    "UPL": "UNIP",
+    "Tata Consumer": "TATGLO",
+    "Britannia": "BRIIND",
+    "Nestle India": "NESIND",
+    "Hindustan Unilever": "HINLEV",
+    "Cipla": "CIPLA",
+    "Dr Reddy's": "DRREDD",
+    "Divi's Labs": "DIVLAB",
+    "Apollo Hospitals": "APOHOS",
+    "IOC": "INDOIL",
+    "BPCL": "BHAPET",
+    "ONGC": "ONGC",
+    "Gail India": "GAIL",
+    "Pidilite": "PIDIND",
+    "Berger Paints": "BERPAI",
+    "Havells": "HAVIND",
+    "Godrej Consumer": "GODCON",
+    "Dabur": "DABIND",
+    "Marico": "MARLIM",
+    "Colgate": "COLPAL",
+    "United Spirits": "UNISPI",
+    "Varun Beverages": "VARBEV",
+    "Zomato": "ZOMATO",
+    "Paytm": "ONE97",
+    "LIC": "LIC",
+    "SBI Cards": "SBICAR",
+    "Cholamandalam": "CHOINV",
+    "Muthoot Finance": "MUTFIN",
+    "Shriram Finance": "SHRTRA",
+    "Bosch": "BOSLIM",
+    "ABB India": "ABB",
+    "Siemens": "SIEMEN",
+    "Bharat Electronics": "BHAELE",
+    "BHEL": "BHEL",
+    "HAL": "HINAER",
+    "L&T Technology": "LTTEC",
+    "Persistent": "PERSYS",
+    "Coforge": "NIITEC",
+    "Mphasis": "MPHLIM",
+    "LTIMindtree": "LTINFO",
+    "Oracle Financial": "ORAFIN",
+    "DMart": "AVESUP",
+    "Trent": "TRENT",
+    "Jubilant Food": "JUBFOO",
+    "PVR Inox": "PVRLIM",
+    "IndiGo": "INTAVI",
+    "Indian Hotels": "INDHOT",
+    "Oberoi Realty": "OBEREA",
+    "DLF": "DLFLIM",
+    "Godrej Properties": "GODPRO",
+    "Prestige Estates": "PREEST",
+    "Phoenix Mills": "PHOMIL",
+    "Voltas": "VOLTAS",
+    "Blue Star": "BLUSTA",
+    "Crompton Greaves": "CROGR",
+    "Polycab": "POLI",
+    "Dixon Tech": "DIXTEC",
+    "Amber Enterprises": "AMBEN",
+    "Tube Investments": "TUBEIN",
+    "Motherson Sumi": "MOTSU",
+    "Bharat Forge": "BHAFOR",
+    "Balkrishna Ind": "BALIND",
+    "Apollo Tyres": "APOTYR",
+    "MRF": "MRFTYR",
+    "Ashok Leyland": "ASHLEY",
+    "TVS Motor": "TVSMOT",
+    "Escorts Kubota": "ESCORT",
+    "Bajaj Holdings": "BAJHOL",
+    "ICICI Prudential": "ICPRU",
+    "Max Financial": "MAXFIN",
+    "Star Health": "STAHEA",
+    "GIC": "GIC",
+    "New India Assurance": "NEWIN",
+    "Bank of Baroda": "BANBAR",
+    "PNB": "PNBGIL",
+    "Canara Bank": "CANBAN",
+    "Union Bank": "UNIBAN",
+    "Indian Bank": "INDBAN",
+    "Bank of India": "BANIND",
+    "Central Bank": "CENBAN",
+    "IDBI Bank": "IDBI",
+    "AU Small Finance": "AUSMA",
+    "Bandhan Bank": "BANBAN",
+    "Federal Bank": "FEDBAN",
+    "IDFC First Bank": "IDFBAN",
+    "RBL Bank": "RBLBAN",
+    "Yes Bank": "YESBAN",
+    "Karur Vysya Bank": "KARVYS",
+    "Manappuram Finance": "MANAFI",
+    "PNB Housing": "PNBHOU",
+    "Can Fin Homes": "CANHOM",
+    "Aarti Industries": "AARIND",
+    "Deepak Nitrite": "DEENIT",
+    "Navin Fluorine": "NAVFLU",
+    "PI Industries": "PIIND",
+    "SRF": "SRF",
+    "Atul Ltd": "ATUL",
+    "Vinati Organics": "VINORG",
+    "Gujarat Gas": "GUJGA",
+    "Petronet LNG": "PETLNG",
+    "IGL": "INDGAS",
+    "MGL": "MAHGAS",
+    "Adani Total Gas": "ADAGAS",
+    "Adani Power": "ADAPOW",
+    "JSW Energy": "JSWENE",
+    "Tata Power": "TATPOW",
+    "Torrent Power": "TORPOW",
+    "CESC": "CESC",
+    "Alkem Labs": "ALKLAB",
+    "Lupin": "LUPIN",
+    "Aurobindo Pharma": "AURPHA",
+    "Biocon": "BIOCON",
+    "Torrent Pharma": "TORPHA",
+    "Zydus Life": "CADHEA",
+    "Glenmark": "GLEPHA",
+    "Ipca Labs": "IPCLAB",
+    "Natco Pharma": "NATPHA",
+    "Mankind Pharma": "MANKIND",
+    "Laurus Labs": "LAULAB",
+    "Max Healthcare": "MAXHEA",
+    "Fortis Healthcare": "FORHEA",
+    "Narayana Health": "NARHRU",
+    "Vedanta": "VEDLIM",
+    "Jindal Steel": "JINSP",
+    "NMDC": "NATMIN",
+    "SAIL": "SAIL",
+    "Hindustan Zinc": "HINZIN",
+    "NALCO": "NALCHE"
 }
 
+
+
 FINANCIAL_RSS_FEEDS = [
-    ("https://feeds.feedburner.com/ndtvprofit-latest", "NDTV Profit"),
     ("https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms", "ET Markets"),
     ("https://www.moneycontrol.com/rss/latestnews.xml", "Moneycontrol"),
 ]
 
-ARTICLES_PER_REFRESH = 15
-NEWS_AGE_LIMIT_HOURS = 48
-
-POSITIVE_WORDS = ['surge', 'rally', 'gain', 'profit', 'growth', 'high', 'rise', 'up', 'bullish', 
-                  'strong', 'beats', 'outperform', 'success', 'jumps', 'soars', 'positive']
-NEGATIVE_WORDS = ['fall', 'drop', 'loss', 'decline', 'weak', 'down', 'crash', 'bearish',
-                  'concern', 'worry', 'risk', 'plunge', 'slump', 'miss', 'negative']
-
 # --------------------------
 # Initialize session state
 # --------------------------
+if 'breeze_client' not in st.session_state:
+    st.session_state.breeze_client = None
+if 'breeze_connected' not in st.session_state:
+    st.session_state.breeze_connected = False
 if 'news_articles' not in st.session_state:
     st.session_state.news_articles = []
-if 'selected_stock' not in st.session_state:
-    st.session_state.selected_stock = "All Stocks"
-if 'earnings_data' not in st.session_state:
-    st.session_state.earnings_data = []
-if 'last_earnings_fetch' not in st.session_state:
-    st.session_state.last_earnings_fetch = None
-if 'technical_data' not in st.session_state:
-    st.session_state.technical_data = []
-if 'watchlist_stocks' not in st.session_state:
-    # Default watchlist - top 16 F&O stocks
-    st.session_state.watchlist_stocks = [
-        "Reliance", "TCS", "HDFC Bank", "Infosys", 
-        "ICICI Bank", "Bharti Airtel", "ITC", "SBI",
-        "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank", "Axis Bank",
-        "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"
-    ]
 
 # --------------------------
-# Technical Analysis Functions
+# Breeze Connection
 # --------------------------
-def calculate_rsi(data, period=14):
-    """Calculate RSI indicator"""
-    delta = data.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-def calculate_macd(data, fast=12, slow=26, signal=9):
-    """Calculate MACD indicator"""
-    exp1 = data.ewm(span=fast, adjust=False).mean()
-    exp2 = data.ewm(span=slow, adjust=False).mean()
-    macd = exp1 - exp2
-    signal_line = macd.ewm(span=signal, adjust=False).mean()
-    return macd, signal_line
-
-def calculate_ao(high, low, fast=5, slow=34):
-    """Calculate Awesome Oscillator"""
-    median_price = (high + low) / 2
-    ao = median_price.rolling(window=fast).mean() - median_price.rolling(window=slow).mean()
-    return ao
-
-def calculate_sma(data, period):
-    """Calculate Simple Moving Average"""
-    return data.rolling(window=period).mean()
-
-def calculate_ema(data, period):
-    """Calculate Exponential Moving Average"""
-    return data.ewm(span=period, adjust=False).mean()
-
-def generate_signal(ticker_symbol):
-    """Generate buy/sell signal based on technical indicators"""
+@st.cache_resource
+def init_breeze():
     try:
-        stock = yf.Ticker(ticker_symbol)
-        df = stock.history(period='3mo')
-        
-        if df.empty or len(df) < 50:
+        breeze = BreezeConnect(api_key=app_key)
+        breeze.generate_session(api_secret=secret_key, session_token=session_token)
+        return breeze, True
+    except Exception as e:
+        st.error(f"Connection Error: {str(e)}")
+        return None, False
+
+if not st.session_state.breeze_connected:
+    breeze, connected = init_breeze()
+    st.session_state.breeze_client = breeze
+    st.session_state.breeze_connected = connected
+
+# --------------------------
+# Data Functions
+# --------------------------
+def fetch_historical_data(stock_code, days=30, interval="1day"):
+    """Fetch historical data with error handling"""
+    try:
+        breeze = st.session_state.breeze_client
+        if not breeze:
             return None
         
-        # Calculate indicators
-        df['RSI'] = calculate_rsi(df['Close'])
-        df['MACD'], df['Signal'] = calculate_macd(df['Close'])
-        df['AO'] = calculate_ao(df['High'], df['Low'])
+        to_date = datetime.now()
+        from_date = to_date - timedelta(days=days)
         
-        # Get latest values
-        current_price = df['Close'].iloc[-1]
-        rsi = df['RSI'].iloc[-1]
-        macd = df['MACD'].iloc[-1]
-        signal_line = df['Signal'].iloc[-1]
-        ao = df['AO'].iloc[-1]
+        from_date_str = from_date.strftime("%Y-%m-%d") + "T07:00:00.000Z"
+        to_date_str = to_date.strftime("%Y-%m-%d") + "T23:59:59.000Z"
         
-        # Signal logic
-        signals = []
-        score = 0
+        response = breeze.get_historical_data(
+            interval=interval,
+            from_date=from_date_str,
+            to_date=to_date_str,
+            stock_code=stock_code,
+            exchange_code="NSE",
+            product_type="cash"
+        )
         
-        # RSI Analysis
-        if rsi < 30:
-            signals.append("RSI Oversold")
-            score += 2
-        elif rsi > 70:
-            signals.append("RSI Overbought")
-            score -= 2
-        elif 40 <= rsi <= 60:
-            signals.append("RSI Neutral")
-            score += 0
+        time.sleep(0.7)  # Rate limiting
         
-        # MACD Analysis
-        if macd > signal_line:
-            signals.append("MACD Bullish")
-            score += 1
-        else:
-            signals.append("MACD Bearish")
-            score -= 1
+        if response and 'Success' in response and response['Success']:
+            df = pd.DataFrame(response['Success'])
+            
+            # Handle different column names
+            if 'datetime' in df.columns:
+                df['Date'] = pd.to_datetime(df['datetime'])
+            elif 'stock_date_time' in df.columns:
+                df['Date'] = pd.to_datetime(df['stock_date_time'])
+            
+            # Standardize column names
+            rename_map = {}
+            for col in df.columns:
+                col_lower = col.lower()
+                if col_lower == 'open':
+                    rename_map[col] = 'Open'
+                elif col_lower == 'high':
+                    rename_map[col] = 'High'
+                elif col_lower == 'low':
+                    rename_map[col] = 'Low'
+                elif col_lower == 'close':
+                    rename_map[col] = 'Close'
+                elif col_lower == 'volume':
+                    rename_map[col] = 'Volume'
+            
+            df = df.rename(columns=rename_map)
+            
+            if 'Date' in df.columns:
+                df = df.set_index('Date')
+                df = df.sort_index()
+                
+                # Convert to numeric
+                for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+                # Remove NaN rows
+                df = df.dropna(subset=['Close'])
+                
+                return df
         
-        # AO Analysis
-        if ao > 0:
-            signals.append("AO Positive")
-            score += 1
-        else:
-            signals.append("AO Negative")
-            score -= 1
-        
-        # Final recommendation
-        if score >= 3:
-            recommendation = "🟢 STRONG BUY"
-        elif score >= 1:
-            recommendation = "🟡 BUY"
-        elif score <= -3:
-            recommendation = "🔴 STRONG SELL"
-        elif score <= -1:
-            recommendation = "🟠 SELL"
-        else:
-            recommendation = "⚪ HOLD"
-        
-        return {
-            'price': current_price,
-            'rsi': rsi,
-            'macd': macd,
-            'ao': ao,
-            'signals': ', '.join(signals),
-            'recommendation': recommendation,
-            'score': score
-        }
+        return None
     except Exception as e:
+        st.error(f"Error fetching {stock_code}: {str(e)}")
         return None
 
 # --------------------------
-# Sentiment analysis
+# Technical Indicators
+# --------------------------
+def calculate_sma(data, period):
+    """Simple Moving Average"""
+    try:
+        return data.rolling(window=period).mean()
+    except:
+        return pd.Series(index=data.index)
+
+def calculate_ema(data, period):
+    """Exponential Moving Average"""
+    try:
+        return data.ewm(span=period, adjust=False).mean()
+    except:
+        return pd.Series(index=data.index)
+
+def calculate_rsi(data, period=14):
+    """RSI Indicator"""
+    try:
+        delta = data.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        rs = gain / (loss + 0.0001)
+        return 100 - (100 / (1 + rs))
+    except:
+        return pd.Series(index=data.index)
+
+def calculate_macd(data, fast=12, slow=26, signal=9):
+    """MACD Indicator"""
+    try:
+        exp1 = data.ewm(span=fast, adjust=False).mean()
+        exp2 = data.ewm(span=slow, adjust=False).mean()
+        macd = exp1 - exp2
+        signal_line = macd.ewm(span=signal, adjust=False).mean()
+        return macd, signal_line
+    except:
+        return pd.Series(index=data.index), pd.Series(index=data.index)
+
+# --------------------------
+# Sentiment Analysis
 # --------------------------
 def analyze_sentiment(text):
-    """Simple keyword-based sentiment analysis"""
+    """Keyword-based sentiment analysis"""
+    POSITIVE = ['surge', 'rally', 'gain', 'profit', 'growth', 'rise', 'bullish', 
+                'strong', 'beats', 'outperform', 'jumps', 'soars', 'upgrade']
+    
+    NEGATIVE = ['fall', 'drop', 'loss', 'decline', 'weak', 'crash', 'bearish',
+                'concern', 'risk', 'plunge', 'slump', 'miss', 'downgrade']
+    
     text_lower = text.lower()
-    positive_count = sum(1 for word in POSITIVE_WORDS if word in text_lower)
-    negative_count = sum(1 for word in NEGATIVE_WORDS if word in text_lower)
+    pos_count = sum(1 for w in POSITIVE if w in text_lower)
+    neg_count = sum(1 for w in NEGATIVE if w in text_lower)
     
-    if positive_count > negative_count:
-        sentiment = "positive"
-        score = min(0.6 + (positive_count * 0.1), 0.95)
-    elif negative_count > positive_count:
-        sentiment = "negative"
-        score = min(0.6 + (negative_count * 0.1), 0.95)
+    if pos_count > neg_count:
+        return "positive", min(0.6 + pos_count * 0.1, 0.95)
+    elif neg_count > pos_count:
+        return "negative", min(0.6 + neg_count * 0.1, 0.95)
     else:
-        sentiment = "neutral"
-        score = 0.5
-    
-    return sentiment, round(score, 2)
+        return "neutral", 0.5
 
-# --------------------------
-# NEWS Functions
-# --------------------------
-def is_recent(published_time, hours_limit=NEWS_AGE_LIMIT_HOURS):
-    """Check if article is within the time limit"""
-    try:
-        if not published_time:
-            return True
-        
-        pub_time = None
-        if hasattr(published_time, 'tm_year'):
-            pub_time = datetime(*published_time[:6])
-        elif isinstance(published_time, str):
-            for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%Y-%m-%dT%H:%M:%S%z']:
-                try:
-                    pub_time = datetime.strptime(published_time, fmt)
-                    break
-                except:
-                    continue
-        
-        if pub_time:
-            if pub_time.tzinfo:
-                pub_time = pub_time.replace(tzinfo=None)
-            cutoff_time = datetime.now() - timedelta(hours=hours_limit)
-            return pub_time >= cutoff_time
-        
-        return True
-    except:
-        return True
-
-def check_fno_mention(text):
-    """Check if text mentions any F&O stock"""
-    text_upper = text.upper()
-    for stock in FNO_STOCKS:
-        if stock.upper() in text_upper:
-            return True
-    return False
-
-def get_mentioned_stocks(text):
-    """Get list of stocks mentioned in the text"""
-    text_upper = text.upper()
-    mentioned = []
-    for stock in FNO_STOCKS:
-        if stock.upper() in text_upper:
-            if stock not in mentioned:
-                mentioned.append(stock)
-    return mentioned if mentioned else ["Other"]
-
-def fetch_news(num_articles=15, specific_stock=None, force_new=False):
+def fetch_news(num_articles=12, specific_stock=None):
     """Fetch news articles"""
     all_articles = []
-    
-    if force_new or (specific_stock and specific_stock != "All Stocks"):
-        seen_titles = set()
-    else:
-        seen_titles = {article['Title'] for article in st.session_state.news_articles}
-    
-    if specific_stock and specific_stock != "All Stocks":
-        priority_stocks = [specific_stock]
-        num_articles = num_articles * 3
-    else:
-        priority_stocks = FNO_STOCKS[:30]
-    
-    for stock in priority_stocks:
-        try:
-            url = f"https://news.google.com/rss/search?q={stock}+stock+india+when:2d&hl=en-IN&gl=IN&ceid=IN:en"
-            feed = feedparser.parse(url)
-            articles_per_stock = 10 if specific_stock == stock else 2
-            
-            for entry in feed.entries[:articles_per_stock]:
-                title = entry.title
-                if title in seen_titles:
-                    continue
-                published = getattr(entry, 'published_parsed', None)
-                if not is_recent(published):
-                    continue
-                all_articles.append(entry)
-                seen_titles.add(title)
-                if len(all_articles) >= num_articles:
-                    break
-        except:
-            continue
-        if len(all_articles) >= num_articles:
-            break
+    seen_titles = set()
     
     for feed_url, source_name in FINANCIAL_RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:10]:
-                title = entry.title if hasattr(entry, 'title') else ""
-                if title in seen_titles:
+            for entry in feed.entries[:15]:
+                title = getattr(entry, 'title', '')
+                if not title or title in seen_titles:
                     continue
-                full_text = title + " " + getattr(entry, 'summary', '')
                 
                 if specific_stock and specific_stock != "All Stocks":
-                    if specific_stock.upper() not in full_text.upper():
-                        continue
-                else:
-                    if not check_fno_mention(full_text):
+                    if specific_stock.upper() not in title.upper():
                         continue
                 
-                published = getattr(entry, 'published_parsed', None)
-                if not is_recent(published):
-                    continue
-                all_articles.append(entry)
+                sentiment, score = analyze_sentiment(title)
+                
+                all_articles.append({
+                    "Title": title,
+                    "Source": source_name,
+                    "Sentiment": sentiment,
+                    "Score": score,
+                    "Link": entry.link,
+                    "Published": getattr(entry, 'published', 'Recent')
+                })
                 seen_titles.add(title)
+                
                 if len(all_articles) >= num_articles:
                     break
         except:
             continue
+        
         if len(all_articles) >= num_articles:
             break
     
     return all_articles[:num_articles]
 
-def process_news(articles):
-    """Process news articles with sentiment analysis"""
-    records = []
-    for art in articles:
-        title = art.title
-        source = getattr(art, "source", {}).get("title", "Unknown") if hasattr(art, "source") else "Unknown"
-        url = art.link
-        published = getattr(art, 'published', 'Unknown')
-        mentioned_stocks = get_mentioned_stocks(title + " " + getattr(art, 'summary', ''))
-        
-        sentiment, score = analyze_sentiment(title)
-        
-        records.append({
-            "Title": title,
-            "Source": source,
-            "Sentiment": sentiment,
-            "Score": score,
-            "Link": url,
-            "Published": published,
-            "Stocks": mentioned_stocks
-        })
-    return records
-
-def filter_news_by_stock(news_articles, stock_name):
-    """Filter news articles by specific stock"""
-    if stock_name == "All Stocks":
-        return news_articles
-    filtered = []
-    for article in news_articles:
-        if stock_name in article.get('Stocks', []):
-            filtered.append(article)
-    return filtered
-
-# --------------------------
-# EARNINGS Functions - Q2 FY26 (Jul-Sep 2025, Results in Oct-Nov 2025)
-# --------------------------
-@st.cache_data(ttl=1800)
-def fetch_q2_fy26_earnings():
-    """Generate Q2 FY26 earnings calendar - Jul-Sep 2025 quarter results"""
-    earnings_list = []
-    
-    # Current date: Nov 15, 2025
-    # FY26 = April 1, 2025 - March 31, 2026
-    # Q2 FY26 = Jul-Sep 2025, results announced in Oct-Nov 2025
-    
-    # Companies reporting on Nov 13-14, 2025 (upcoming)
-    nov_13_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
-    nov_14_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
-    
-    # Add Nov 13 companies
-    for company in nov_13_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
-            'Expected Date': '13-Nov-2025',
-            'Day': 'Thursday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add Nov 14 companies
-    for company in nov_14_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
-            'Expected Date': '14-Nov-2025',
-            'Day': 'Friday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add some companies that already reported (Oct 10 - Nov 12)
-    early_reporters = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan",
-                       "Sun Pharma", "HCL Tech", "Nestle", "Adani Enterprises", "Tata Motors"]
-    
-    base_date_past = datetime(2025, 10, 10)
-    for i, company in enumerate(early_reporters):
-        days_offset = (i * 3) % 30
-        result_date = base_date_past + timedelta(days=days_offset)
-        
-        # Skip weekends
-        while result_date.weekday() >= 5:
-            result_date += timedelta(days=1)
-        
-        # Only add if before Nov 13
-        if result_date < datetime(2025, 11, 13):
-            earnings_list.append({
-                'Company': company,
-                'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
-                'Expected Date': result_date.strftime('%d-%b-%Y'),
-                'Day': result_date.strftime('%A'),
-                'Status': 'Reported'
-            })
-    
-    # Add remaining F&O companies (scheduled for Nov 15 onwards)
-    reported_companies = set(nov_13_companies + nov_14_companies + early_reporters)
-    remaining_companies = [c for c in FNO_STOCKS if c not in reported_companies]
-    
-    base_date_future = datetime(2025, 11, 15)
-    
-    for i, stock in enumerate(remaining_companies):
-        days_offset = (i * 2) % 20  # Spread across ~20 days
-        result_date = base_date_future + timedelta(days=days_offset)
-        
-        # Skip weekends
-        while result_date.weekday() >= 5:
-            result_date += timedelta(days=1)
-        
-        earnings_list.append({
-            'Company': stock,
-            'Quarter': 'Q2 FY26 (Jul-Sep 2025)',
-            'Expected Date': result_date.strftime('%d-%b-%Y'),
-            'Day': result_date.strftime('%A'),
-            'Status': 'Estimated'
-        })
-    
-    # Sort by date
-    earnings_list.sort(key=lambda x: datetime.strptime(x['Expected Date'], '%d-%b-%Y'))
-    
-    return earnings_list
-
-@st.cache_data(ttl=1800)
-def fetch_q3_fy26_earnings():
-    """Generate Q3 FY26 earnings calendar - Oct-Dec 2025 quarter results"""
-    earnings_list = []
-    
-    # Q3 FY26 = Oct-Dec 2025, results will be announced in Jan-Feb 2026
-    
-    # Key reporting dates in January 2026
-    jan_15_companies = ["Reliance", "TCS", "HDFC Bank", "Infosys", "ICICI Bank", "Bharti Airtel"]
-    jan_16_companies = ["ITC", "SBI", "Hindustan Unilever", "Bajaj Finance", "Kotak Mahindra Bank"]
-    jan_17_companies = ["Axis Bank", "Larsen & Toubro", "Asian Paints", "Maruti Suzuki", "Titan"]
-    
-    # Add Jan 15 companies
-    for company in jan_15_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
-            'Expected Date': '15-Jan-2026',
-            'Day': 'Thursday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add Jan 16 companies
-    for company in jan_16_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
-            'Expected Date': '16-Jan-2026',
-            'Day': 'Friday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add Jan 17 companies
-    for company in jan_17_companies:
-        earnings_list.append({
-            'Company': company,
-            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
-            'Expected Date': '17-Jan-2026',
-            'Day': 'Saturday',
-            'Status': 'Scheduled'
-        })
-    
-    # Add remaining F&O companies across Jan-Feb 2026
-    scheduled_companies = set(jan_15_companies + jan_16_companies + jan_17_companies)
-    remaining_companies = [c for c in FNO_STOCKS if c not in scheduled_companies]
-    
-    base_date = datetime(2026, 1, 10)
-    
-    for i, stock in enumerate(remaining_companies):
-        days_offset = (i * 2) % 37  # Spread across 37 days
-        result_date = base_date + timedelta(days=days_offset)
-        
-        # Skip weekends
-        while result_date.weekday() >= 5:
-            result_date += timedelta(days=1)
-        
-        # Keep within Jan-Feb 2026
-        if result_date > datetime(2026, 2, 28):
-            result_date = datetime(2026, 1, 20) + timedelta(days=(i % 15))
-            while result_date.weekday() >= 5:
-                result_date += timedelta(days=1)
-        
-        earnings_list.append({
-            'Company': stock,
-            'Quarter': 'Q3 FY26 (Oct-Dec 2025)',
-            'Expected Date': result_date.strftime('%d-%b-%Y'),
-            'Day': result_date.strftime('%A'),
-            'Status': 'Estimated'
-        })
-    
-    # Sort by date
-    earnings_list.sort(key=lambda x: datetime.strptime(x['Expected Date'], '%d-%b-%Y'))
-    
-    return earnings_list
-
 # --------------------------
 # Streamlit App
 # --------------------------
 
+st.title("📈 F&O Dashboard - ICICI Breeze")
+
+# Connection Status
+if st.session_state.breeze_connected:
+    st.success("✅ Connected to Breeze API")
+else:
+    st.error("❌ Not connected to Breeze API")
+    st.stop()
+
+st.markdown("---")
+
 # Main tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📰 News Dashboard", "📅 Q2 FY26 Earnings", "📅 Q3 FY26 Earnings", "📈 Technical Analysis", "💹 Stock Charts", "📊 Live Multi-Chart"])
+tab1, tab2, tab3 = st.tabs(["📰 News", "💹 Charts & Indicators", "⚡ Intraday Monitor"])
 
-# --------------------------
-# TAB 1: NEWS DASHBOARD
-# --------------------------
+# TAB 1: NEWS
 with tab1:
-    st.title("📈 F&O Stocks News Dashboard (Last 48 Hours)")
-    st.markdown("Real-time news about F&O stocks with sentiment analysis")
-    st.markdown(f"*Showing news from last 2 days* | *{len(FNO_STOCKS)} F&O stocks tracked*")
-    st.markdown("---")
-
-    col1, col2, col3 = st.columns([2, 2, 2])
-
+    st.header("Market News & Sentiment")
+    
+    col1, col2 = st.columns(2)
+    
     with col1:
-        stock_options = ["All Stocks"] + sorted(FNO_STOCKS)
-        selected_stock = st.selectbox(
-            "🔍 Filter by Stock",
-            options=stock_options,
-            index=stock_options.index(st.session_state.selected_stock),
-            key="stock_filter"
+        stock_filter = st.selectbox(
+            "Filter by Stock",
+            ["All Stocks"] + FNO_STOCKS,
+            key="news_filter"
         )
-        
-        if selected_stock != st.session_state.selected_stock:
-            st.session_state.selected_stock = selected_stock
-            if selected_stock != "All Stocks":
-                with st.spinner(f"Fetching fresh news for {selected_stock}..."):
-                    new_articles = fetch_news(ARTICLES_PER_REFRESH, selected_stock, force_new=True)
-                    if new_articles:
-                        processed_news = process_news(new_articles)
-                        st.session_state.news_articles = processed_news + st.session_state.news_articles
-                        seen = set()
-                        unique_articles = []
-                        for article in st.session_state.news_articles:
-                            if article['Title'] not in seen:
-                                unique_articles.append(article)
-                                seen.add(article['Title'])
-                        st.session_state.news_articles = unique_articles[:100]
-                        st.rerun()
-
+    
     with col2:
-        if st.button("🔄 Refresh News", type="primary", use_container_width=True):
-            with st.spinner(f"Fetching latest updates..."):
-                new_articles = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock, force_new=True)
-                if new_articles:
-                    processed_news = process_news(new_articles)
-                    st.session_state.news_articles = processed_news + st.session_state.news_articles
-                    seen = set()
-                    unique_articles = []
-                    for article in st.session_state.news_articles:
-                        if article['Title'] not in seen:
-                            unique_articles.append(article)
-                            seen.add(article['Title'])
-                    st.session_state.news_articles = unique_articles[:100]
-                    news_count = len(processed_news)
-                    st.success(f"✅ Added {news_count} fresh articles!")
-                    st.rerun()
-
-    with col3:
-        if st.button("🗑 Clear All", use_container_width=True):
-            st.session_state.news_articles = []
-            st.success("✅ Cleared all news!")
-            st.rerun()
-
+        if st.button("🔄 Refresh News", key="refresh_news"):
+            st.session_state.news_articles = fetch_news(12, stock_filter)
+            st.success("News refreshed!")
+    
     if not st.session_state.news_articles:
-        with st.spinner("Loading initial content..."):
-            initial_news = fetch_news(ARTICLES_PER_REFRESH, st.session_state.selected_stock)
-            if initial_news:
-                st.session_state.news_articles = process_news(initial_news)
-
-    filtered_articles = filter_news_by_stock(st.session_state.news_articles, st.session_state.selected_stock)
-
-    if filtered_articles:
-        df_all = pd.DataFrame(filtered_articles)
-        
-        st.subheader(f"📊 Metrics for {st.session_state.selected_stock}")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        total_items = len(df_all)
-        positive_count = len(df_all[df_all['Sentiment'].str.lower() == 'positive'])
-        neutral_count = len(df_all[df_all['Sentiment'].str.lower() == 'neutral'])
-        negative_count = len(df_all[df_all['Sentiment'].str.lower() == 'negative'])
-        
-        with col1:
-            st.metric("Total Articles", total_items)
-        with col2:
-            st.metric("🟢 Positive", positive_count)
-        with col3:
-            st.metric("⚪ Neutral", neutral_count)
-        with col4:
-            st.metric("🔴 Negative", negative_count)
-        
-        st.markdown("---")
-        
-        st.subheader("📊 Sentiment Distribution")
-        sentiment_counts = df_all['Sentiment'].value_counts().reset_index()
-        sentiment_counts.columns = ["Sentiment", "Count"]
-        
-        fig = px.bar(
-            sentiment_counts,
-            x="Sentiment",
-            y="Count",
-            color="Sentiment",
-            color_discrete_map={
-                "positive": "green",
-                "neutral": "gray",
-                "negative": "red"
-            },
-            title=f"Sentiment Analysis for {st.session_state.selected_stock}",
-            text="Count"
-        )
-        fig.update_traces(textposition='outside')
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("---")
-        
-        st.subheader(f"📰 News Articles for {st.session_state.selected_stock}")
-        
-        for article in filtered_articles:
-            with st.container():
-                sentiment_color = {
-                    "positive": "#28a745",
-                    "neutral": "#6c757d",
-                    "negative": "#dc3545"
-                }
-                
-                sentiment_emoji = {
-                    "positive": "🟢",
-                    "neutral": "⚪",
-                    "negative": "🔴"
-                }
-                
-                st.markdown(f"[{article['Title']}]({article['Link']})")
-                sentiment_text = f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()} (confidence: {article['Score']})"
-                st.markdown(f"<span style='background-color: {sentiment_color[article['Sentiment']]}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{sentiment_text}</span>", unsafe_allow_html=True)
-                
-                if article.get('Stocks'):
-                    stocks_text = ", ".join(article['Stocks'][:5])
-                    st.caption(f"📊 Stocks mentioned: {stocks_text}")
-                
-                st.caption(f"Source: {article['Source']} | {article.get('Published', 'Recent')}")
-                st.markdown("---")
-
-# --------------------------
-# TAB 2: Q2 FY26 EARNINGS
-# --------------------------
-with tab2:
-    st.title("📅 Q2 FY26 Earnings Calendar")
-    st.markdown("Q2 FY26 (Jul-Sep 2025) earnings announcements for F&O stocks")
-    st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
-    st.markdown("---")
+        st.session_state.news_articles = fetch_news(12, stock_filter)
     
-    col1, col2 = st.columns([3, 3])
-    
-    with col1:
-        if st.button("🔄 Refresh Q2 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q2"):
-            with st.spinner("Fetching Q2 FY26 earnings..."):
-                st.cache_data.clear()
-                earnings = fetch_q2_fy26_earnings()
-                st.session_state.earnings_data = earnings
-                st.session_state.last_earnings_fetch = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q2 FY26 results!")
-                st.rerun()
-    
-    with col2:
-        if st.session_state.last_earnings_fetch:
-            time_ago = datetime.now() - st.session_state.last_earnings_fetch
-            minutes_ago = int(time_ago.total_seconds() / 60)
-            st.info(f"⏱ Last updated {minutes_ago} minutes ago")
-    
-    if not st.session_state.earnings_data:
-        with st.spinner("Loading Q2 FY26 calendar..."):
-            earnings = fetch_q2_fy26_earnings()
-            st.session_state.earnings_data = earnings
-            st.session_state.last_earnings_fetch = datetime.now()
-    
-    if st.session_state.earnings_data:
-        df_earnings = pd.DataFrame(st.session_state.earnings_data)
-        
-        st.subheader("📊 Q2 FY26 Overview")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Companies", len(df_earnings))
-        with col2:
-            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
-            st.metric("Upcoming", scheduled)
-        with col3:
-            reported = len(df_earnings[df_earnings['Status'] == 'Reported'])
-            st.metric("Already Reported", reported)
-        with col4:
-            estimated = len(df_earnings[df_earnings['Status'] == 'Estimated'])
-            st.metric("Estimated", estimated)
-        
-        st.markdown("---")
-        
-        # Highlight upcoming Nov 13-14 results
-        st.subheader("🔥 Upcoming This Week (Nov 13-14, 2025)")
-        upcoming_df = df_earnings[df_earnings['Expected Date'].isin(['13-Nov-2025', '14-Nov-2025'])]
-        if not upcoming_df.empty:
-            st.dataframe(
-                upcoming_df,
-                use_container_width=True,
-                height=300,
-                column_config={
-                    "Company": st.column_config.TextColumn("Company", width="medium"),
-                    "Quarter": st.column_config.TextColumn("Quarter", width="small"),
-                    "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
-                    "Day": st.column_config.TextColumn("Day", width="small"),
-                    "Status": st.column_config.TextColumn("Status", width="small")
-                }
-            )
-        
-        st.markdown("---")
-        
-        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q2")
-        
-        if search_earnings:
-            mask = df_earnings['Company'].str.contains(search_earnings, case=False)
-            filtered_earnings = df_earnings[mask]
-        else:
-            filtered_earnings = df_earnings
-        
-        st.info(f"Showing {len(filtered_earnings)} companies")
-        
-        st.dataframe(
-            filtered_earnings,
-            use_container_width=True,
-            height=600,
-            column_config={
-                "Company": st.column_config.TextColumn("Company", width="medium"),
-                "Quarter": st.column_config.TextColumn("Quarter", width="small"),
-                "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
-                "Day": st.column_config.TextColumn("Day", width="small"),
-                "Status": st.column_config.TextColumn("Status", width="small")
-            }
-        )
-        
-        csv_earnings = filtered_earnings.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Q2 FY26 Calendar (CSV)",
-            data=csv_earnings,
-            file_name=f"q2_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            key="download_q2"
-        )
-        
-# --------------------------
-# TAB 3: Q3 FY26 EARNINGS
-# --------------------------
-with tab3:
-    st.title("📅 Q3 FY26 Earnings Calendar")
-    st.markdown("Q3 FY26 (Oct-Dec 2025) earnings announcements for F&O stocks")
-    st.markdown("📰 *Indian Financial Year: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)*")
-    st.markdown("---")
-    
-    col1, col2 = st.columns([3, 3])
-    
-    with col1:
-        if st.button("🔄 Refresh Q3 FY26 Calendar", type="primary", use_container_width=True, key="refresh_earnings_q3"):
-            with st.spinner("Fetching Q3 FY26 earnings..."):
-                st.cache_data.clear()
-                earnings = fetch_q3_fy26_earnings()
-                st.session_state.earnings_data_q3 = earnings
-                st.session_state.last_earnings_fetch_q3 = datetime.now()
-                st.success(f"✅ Loaded {len(earnings)} Q3 FY26 results!")
-                st.rerun()
-    
-    with col2:
-        if 'last_earnings_fetch_q3' in st.session_state and st.session_state.last_earnings_fetch_q3:
-            time_ago = datetime.now() - st.session_state.last_earnings_fetch_q3
-            minutes_ago = int(time_ago.total_seconds() / 60)
-            st.info(f"⏱ Last updated {minutes_ago} minutes ago")
-    
-    if 'earnings_data_q3' not in st.session_state:
-        with st.spinner("Loading Q3 FY26 calendar..."):
-            earnings = fetch_q3_fy26_earnings()
-            st.session_state.earnings_data_q3 = earnings
-            st.session_state.last_earnings_fetch_q3 = datetime.now()
-    
-    if st.session_state.earnings_data_q3:
-        df_earnings = pd.DataFrame(st.session_state.earnings_data_q3)
-        
-        st.subheader("📊 Q3 FY26 Overview")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Companies", len(df_earnings))
-        with col2:
-            scheduled = len(df_earnings[df_earnings['Status'] == 'Scheduled'])
-            st.metric("Scheduled", scheduled)
-        with col3:
-            jan_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Jan')])
-            st.metric("January Results", jan_dates)
-        with col4:
-            feb_dates = len(df_earnings[df_earnings['Expected Date'].str.contains('Feb')])
-            st.metric("February Results", feb_dates)
-        
-        st.markdown("---")
-        
-        # Highlight key reporting dates
-        st.subheader("🔥 Key Reporting Dates (Jan 15-17, 2026)")
-        key_df = df_earnings[df_earnings['Expected Date'].isin(['15-Jan-2026', '16-Jan-2026', '17-Jan-2026'])]
-        if not key_df.empty:
-            st.dataframe(
-                key_df,
-                use_container_width=True,
-                height=300,
-                column_config={
-                    "Company": st.column_config.TextColumn("Company", width="medium"),
-                    "Quarter": st.column_config.TextColumn("Quarter", width="small"),
-                    "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
-                    "Day": st.column_config.TextColumn("Day", width="small"),
-                    "Status": st.column_config.TextColumn("Status", width="small")
-                }
-            )
-        
-        st.markdown("---")
-        
-        search_earnings = st.text_input("🔍 Search by Company Name", "", key="search_q3")
-        
-        if search_earnings:
-            mask = df_earnings['Company'].str.contains(search_earnings, case=False)
-            filtered_earnings = df_earnings[mask]
-        else:
-            filtered_earnings = df_earnings
-        
-        st.info(f"Showing {len(filtered_earnings)} companies")
-        
-        st.dataframe(
-            filtered_earnings,
-            use_container_width=True,
-            height=600,
-            column_config={
-                "Company": st.column_config.TextColumn("Company", width="medium"),
-                "Quarter": st.column_config.TextColumn("Quarter", width="small"),
-                "Expected Date": st.column_config.TextColumn("Expected Date", width="small"),
-                "Day": st.column_config.TextColumn("Day", width="small"),
-                "Status": st.column_config.TextColumn("Status", width="small")
-            }
-        )
-        
-        csv_earnings = filtered_earnings.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Q3 FY26 Calendar (CSV)",
-            data=csv_earnings,
-            file_name=f"q3_fy26_earnings_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            key="download_q3"
-        )
-        
-# --------------------------
-# TAB 4: TECHNICAL ANALYSIS
-# --------------------------
-with tab4:
-    st.title("📈 Technical Analysis - Buy/Sell Signals")
-    st.markdown("RSI, MACD, and AO analysis for F&O stocks")
-    st.markdown("---")
-    
-    col1, col2 = st.columns([3, 3])
-    
-    with col1:
-        # Changed to allow "All Stocks" option
-        analysis_options = ["10 Stocks", "20 Stocks", "30 Stocks", "50 Stocks", "All Stocks"]
-        selected_analysis = st.selectbox(
-            "📊 Number of Stocks to Analyze",
-            options=analysis_options,
-            index=1,
-            key="tech_limit"
-        )
-    
-    with col2:
-        if st.button("🔄 Run Technical Analysis", type="primary", use_container_width=True, key="run_tech"):
-            st.session_state.technical_data = []
-            
-            # Determine how many stocks to analyze
-            if selected_analysis == "All Stocks":
-                num_stocks = len(FNO_STOCKS)
-            else:
-                num_stocks = int(selected_analysis.split()[0])
-            
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            stocks_to_analyze = FNO_STOCKS[:num_stocks]
-            
-            for idx, stock_name in enumerate(stocks_to_analyze):
-                ticker = STOCK_TICKER_MAP.get(stock_name)
-                if not ticker:
-                    continue
-                
-                status_text.text(f"Analyzing {stock_name}... ({idx+1}/{num_stocks})")
-                
-                signal_data = generate_signal(ticker)
-                if signal_data:
-                    signal_data['stock'] = stock_name
-                    signal_data['ticker'] = ticker
-                    st.session_state.technical_data.append(signal_data)
-                
-                progress_bar.progress((idx + 1) / num_stocks)
-                time.sleep(0.1)  # Reduced delay for faster processing
-            
-            progress_bar.empty()
-            status_text.empty()
-            st.success(f"✅ Analysis complete for {len(st.session_state.technical_data)} stocks!")
-            st.rerun()
-    
-    if st.session_state.technical_data:
-        df_tech = pd.DataFrame(st.session_state.technical_data)
+    if st.session_state.news_articles:
+        df_news = pd.DataFrame(st.session_state.news_articles)
         
         # Metrics
-        st.subheader("📊 Signal Summary")
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        strong_buy = len(df_tech[df_tech['recommendation'].str.contains('STRONG BUY')])
-        buy = len(df_tech[df_tech['recommendation'].str.contains('BUY')]) - strong_buy
-        hold = len(df_tech[df_tech['recommendation'].str.contains('HOLD')])
-        sell = len(df_tech[df_tech['recommendation'].str.contains('SELL')]) - len(df_tech[df_tech['recommendation'].str.contains('STRONG SELL')])
-        strong_sell = len(df_tech[df_tech['recommendation'].str.contains('STRONG SELL')])
-        
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("🟢 Strong Buy", strong_buy)
+            st.metric("Total", len(df_news))
         with col2:
-            st.metric("🟡 Buy", buy)
+            st.metric("🟢 Positive", len(df_news[df_news['Sentiment'] == 'positive']))
         with col3:
-            st.metric("⚪ Hold", hold)
+            st.metric("⚪ Neutral", len(df_news[df_news['Sentiment'] == 'neutral']))
         with col4:
-            st.metric("🟠 Sell", sell)
-        with col5:
-            st.metric("🔴 Strong Sell", strong_sell)
+            st.metric("🔴 Negative", len(df_news[df_news['Sentiment'] == 'negative']))
         
         st.markdown("---")
         
-        # Filter by recommendation
-        filter_rec = st.multiselect(
-            "🔍 Filter by Recommendation",
-            options=["🟢 STRONG BUY", "🟡 BUY", "⚪ HOLD", "🟠 SELL", "🔴 STRONG SELL"],
-            default=["🟢 STRONG BUY", "🟡 BUY"]
-        )
-        
-        if filter_rec:
-            filtered_tech = df_tech[df_tech['recommendation'].isin(filter_rec)]
-        else:
-            filtered_tech = df_tech
-        
-        # Sort by score
-        filtered_tech = filtered_tech.sort_values('score', ascending=False)
-        
-        st.info(f"Showing {len(filtered_tech)} stocks")
-        
-        # Display detailed results
-        st.subheader("📋 Technical Analysis Results")
-        
-        for idx, row in filtered_tech.iterrows():
-            with st.expander(f"{row['recommendation']} - {row['stock']} @ ₹{row['price']:.2f}"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**Current Price:** ₹{row['price']:.2f}")
-                    st.markdown(f"**RSI (14):** {row['rsi']:.2f}")
-                    st.markdown(f"**MACD:** {row['macd']:.4f}")
-                
-                with col2:
-                    st.markdown(f"**AO (Awesome Oscillator):** {row['ao']:.4f}")
-                    st.markdown(f"**Signal Score:** {row['score']}")
-                    st.markdown(f"**Recommendation:** {row['recommendation']}")
-                
-                st.markdown("---")
-                st.markdown(f"**Technical Signals:** {row['signals']}")
-        
-        # Download option
-        download_df = filtered_tech[['stock', 'ticker', 'price', 'rsi', 'macd', 'ao', 'recommendation', 'score']]
-        csv_tech = download_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Technical Analysis (CSV)",
-            data=csv_tech,
-            file_name=f"technical_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-        
-        st.markdown("---")
-        st.caption("📊 **Indicators Used:** RSI (Relative Strength Index), MACD (Moving Average Convergence Divergence), AO (Awesome Oscillator)")
-        st.caption("⚠ **Disclaimer:** This is for educational purposes only. Not financial advice. Always do your own research.")
-    
-    else:
-        st.info("👆 Click 'Run Technical Analysis' to generate buy/sell signals for F&O stocks.")
-        
-        st.markdown("---")
-        st.subheader("📚 How It Works")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            **Technical Indicators:**
-            - **RSI**: Identifies overbought (>70) and oversold (<30) conditions
-            - **MACD**: Shows bullish/bearish momentum crossovers
-            - **AO**: Awesome Oscillator for momentum confirmation
-            """)
-        
-        with col2:
-            st.markdown("""
-            **Signal Scoring:**
-            - **Strong Buy**: Score ≥ 3 (Multiple bullish indicators)
-            - **Buy**: Score 1-2 (Some bullish signals)
-            - **Hold**: Score 0 (Neutral)
-            - **Sell**: Score -1 to -2 (Some bearish signals)
-            - **Strong Sell**: Score ≤ -3 (Multiple bearish indicators)
-            """)
+        # Display articles
+        for article in st.session_state.news_articles:
+            sentiment_colors = {"positive": "#28a745", "neutral": "#6c757d", "negative": "#dc3545"}
+            sentiment_emoji = {"positive": "🟢", "neutral": "⚪", "negative": "🔴"}
+            
+            st.markdown(f"**[{article['Title']}]({article['Link']})**")
+            st.markdown(
+                f"<span style='background-color: {sentiment_colors[article['Sentiment']]}; "
+                f"color: white; padding: 3px 10px; border-radius: 4px; font-size: 11px;'>"
+                f"{sentiment_emoji[article['Sentiment']]} {article['Sentiment'].upper()}</span>",
+                unsafe_allow_html=True
+            )
+            st.caption(f"Source: {article['Source']} | {article['Published']}")
+            st.markdown("---")
 
-# --------------------------
-# TAB 5: STOCK CHARTS
-# --------------------------
-with tab5:
-    st.title("💹 Stock Price Charts")
-    st.markdown("Candlestick charts with SMA/EMA and technical indicators")
-    st.markdown("---")
+# TAB 2: CHARTS WITH INDICATORS
+with tab2:
+    st.header("Stock Charts with Technical Indicators")
     
-    col1, col2 = st.columns([2, 2])
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        selected_chart_stock = st.selectbox(
-            "📊 Select Stock",
-            options=sorted(FNO_STOCKS),
+        selected_stock = st.selectbox(
+            "Select Stock",
+            FNO_STOCKS,
             key="chart_stock"
         )
     
     with col2:
         period = st.selectbox(
-            "📅 Time Period",
-            options=["1mo", "3mo", "6mo", "1y", "2y"],
-            index=2,
+            "Period",
+            {"1 Week": 7, "2 Weeks": 14, "1 Month": 30, "3 Months": 90},
+            format_func=lambda x: x,
             key="chart_period"
         )
+        days = {"1 Week": 7, "2 Weeks": 14, "1 Month": 30, "3 Months": 90}[period]
     
-    ticker = STOCK_TICKER_MAP.get(selected_chart_stock)
+    with col3:
+        interval = st.selectbox(
+            "Interval",
+            ["1day", "30minute", "5minute", "1minute"],
+            format_func=lambda x: {"1day": "Daily", "30minute": "30 Min", "5minute": "5 Min", "1minute": "1 Min"}[x],
+            key="chart_interval"
+        )
     
-    if ticker:
-        try:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period=period)
+    if interval != "1day" and days > 5:
+        st.info("ℹ️ Intraday data limited to 5 days")
+        days = 5
+    
+    stock_code = STOCK_CODE_MAP.get(selected_stock)
+    
+    if stock_code:
+        with st.spinner(f"Loading data for {selected_stock}..."):
+            df = fetch_historical_data(stock_code, days, interval)
+        
+        if df is not None and not df.empty and len(df) > 0:
+            # Calculate indicators
+            df['SMA_20'] = calculate_sma(df['Close'], 20)
+            df['SMA_50'] = calculate_sma(df['Close'], 50)
+            df['EMA_12'] = calculate_ema(df['Close'], 12)
+            df['EMA_26'] = calculate_ema(df['Close'], 26)
+            df['RSI'] = calculate_rsi(df['Close'])
+            df['MACD'], df['MACD_Signal'] = calculate_macd(df['Close'])
             
-            if not df.empty and len(df) > 0:
-                # Calculate indicators with new periods
-                df['RSI'] = calculate_rsi(df['Close'])
-                df['MACD'], df['Signal'] = calculate_macd(df['Close'])
-                df['AO'] = calculate_ao(df['High'], df['Low'])
-                
-                # Updated SMA periods: 20, 50, 200
-                df['SMA_20'] = calculate_sma(df['Close'], 20)
-                df['SMA_50'] = calculate_sma(df['Close'], 50)
-                df['SMA_200'] = calculate_sma(df['Close'], 200)
-                
-                # Updated EMA periods: 9, 20, 50
-                df['EMA_9'] = calculate_ema(df['Close'], 9)
-                df['EMA_20'] = calculate_ema(df['Close'], 20)
-                df['EMA_50'] = calculate_ema(df['Close'], 50)
-                
-                # Current metrics
-                current_price = df['Close'].iloc[-1]
-                price_change = df['Close'].iloc[-1] - df['Close'].iloc[0]
-                price_change_pct = (price_change / df['Close'].iloc[0]) * 100
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Current Price", f"₹{current_price:.2f}")
-                with col2:
-                    st.metric("Change", f"₹{price_change:.2f}", f"{price_change_pct:.2f}%")
-                with col3:
-                    st.metric("High", f"₹{df['High'].max():.2f}")
-                with col4:
-                    st.metric("Low", f"₹{df['Low'].min():.2f}")
-                
-                st.markdown("---")
-                
-                # Candlestick Chart
-                fig = go.Figure(data=[go.Candlestick(
+            # Metrics
+            current = df['Close'].iloc[-1]
+            prev = df['Close'].iloc[0]
+            change = current - prev
+            change_pct = (change / prev) * 100
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Current Price", f"₹{current:.2f}")
+            with col2:
+                st.metric("Change", f"₹{change:.2f}", f"{change_pct:.2f}%")
+            with col3:
+                st.metric("High", f"₹{df['High'].max():.2f}")
+            with col4:
+                st.metric("Low", f"₹{df['Low'].min():.2f}")
+            
+            st.markdown("---")
+            
+            # Candlestick chart with moving averages
+            fig = go.Figure()
+            
+            if all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                fig.add_trace(go.Candlestick(
                     x=df.index,
                     open=df['Open'],
                     high=df['High'],
                     low=df['Low'],
                     close=df['Close'],
                     name='Price'
-                )])
+                ))
+                
+                # Add moving averages
+                if 'SMA_20' in df.columns:
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['SMA_20'],
+                        mode='lines',
+                        name='SMA 20',
+                        line=dict(color='blue', width=1.5)
+                    ))
+                
+                if 'SMA_50' in df.columns:
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['SMA_50'],
+                        mode='lines',
+                        name='SMA 50',
+                        line=dict(color='orange', width=1.5)
+                    ))
+                
+                if 'EMA_12' in df.columns:
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['EMA_12'],
+                        mode='lines',
+                        name='EMA 12',
+                        line=dict(color='green', width=1.5, dash='dash')
+                    ))
+                
+                if 'EMA_26' in df.columns:
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['EMA_26'],
+                        mode='lines',
+                        name='EMA 26',
+                        line=dict(color='red', width=1.5, dash='dash')
+                    ))
                 
                 fig.update_layout(
-                    title=f"{selected_chart_stock} - Price Chart",
-                    xaxis_title="Date",
+                    title=f"{selected_stock} - Price Chart with SMA & EMA",
+                    xaxis_title="Date/Time",
                     yaxis_title="Price (₹)",
                     height=500,
-                    xaxis_rangeslider_visible=False
+                    xaxis_rangeslider_visible=False,
+                    hovermode='x unified'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # SMA Chart with updated periods (20, 50, 200)
-                fig_sma = go.Figure()
-                fig_sma.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
-                                           line=dict(color='blue', width=1)))
-                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], name='SMA 20', 
-                                           line=dict(color='orange', dash='solid')))
-                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], name='SMA 50', 
-                                           line=dict(color='red', dash='solid')))
-                fig_sma.add_trace(go.Scatter(x=df.index, y=df['SMA_200'], name='SMA 200', 
-                                           line=dict(color='purple', dash='solid')))
-                
-                fig_sma.update_layout(
-                    title="Simple Moving Averages (SMA 20, 50, 200)",
-                    xaxis_title="Date",
-                    yaxis_title="Price (₹)",
-                    height=400
-                )
-                st.plotly_chart(fig_sma, use_container_width=True)
-                
-                # EMA Chart with updated periods (9, 20, 50)
-                fig_ema = go.Figure()
-                fig_ema.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', 
-                                           line=dict(color='blue', width=1)))
-                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_9'], name='EMA 9', 
-                                           line=dict(color='green', dash='dash')))
-                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
-                                           line=dict(color='yellow', dash='dash')))
-                fig_ema.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
-                                           line=dict(color='cyan', dash='dash')))
-                
-                fig_ema.update_layout(
-                    title="Exponential Moving Averages (EMA 9, 20, 50)",
-                    xaxis_title="Date",
-                    yaxis_title="Price (₹)",
-                    height=400
-                )
-                st.plotly_chart(fig_ema, use_container_width=True)
-                
-                # RSI Chart
-                fig_rsi = go.Figure()
-                fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='purple')))
-                fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought (70)")
-                fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold (30)")
-                fig_rsi.update_layout(
-                    title="RSI (Relative Strength Index)",
-                    xaxis_title="Date",
-                    yaxis_title="RSI",
-                    height=300
-                )
-                st.plotly_chart(fig_rsi, use_container_width=True)
-                
-                # MACD Chart
-                fig_macd = go.Figure()
-                fig_macd.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='blue')))
-                fig_macd.add_trace(go.Scatter(x=df.index, y=df['Signal'], name='Signal', line=dict(color='orange')))
-                fig_macd.update_layout(
-                    title="MACD (Moving Average Convergence Divergence)",
-                    xaxis_title="Date",
-                    yaxis_title="MACD",
-                    height=300
-                )
-                st.plotly_chart(fig_macd, use_container_width=True)
-                
-                # AO Chart
-                fig_ao = go.Figure()
-                colors = ['green' if val > 0 else 'red' for val in df['AO']]
-                fig_ao.add_trace(go.Bar(x=df.index, y=df['AO'], name='AO', marker_color=colors))
-                fig_ao.update_layout(
-                    title="AO (Awesome Oscillator)",
-                    xaxis_title="Date",
-                    yaxis_title="AO",
-                    height=300
-                )
-                st.plotly_chart(fig_ao, use_container_width=True)
-                
-            else:
-                st.error(f"No data available for {selected_chart_stock}. The ticker might be incorrect or data is unavailable.")
-                st.info(f"Ticker used: {ticker}")
-        
-        except Exception as e:
-            st.error(f"Error loading chart for {selected_chart_stock}: {str(e)}")
-            st.info(f"Ticker attempted: {ticker}")
-            st.warning("This stock might not have available data on Yahoo Finance. Try another stock.")
+            
+            # RSI Chart
+            if 'RSI' in df.columns:
+                df_rsi = df.dropna(subset=['RSI'])
+                if len(df_rsi) > 0:
+                    fig_rsi = go.Figure()
+                    fig_rsi.add_trace(go.Scatter(
+                        x=df_rsi.index,
+                        y=df_rsi['RSI'],
+                        mode='lines',
+                        name='RSI',
+                        line=dict(color='purple', width=2)
+                    ))
+                    fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
+                    fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
+                    fig_rsi.update_layout(
+                        title="RSI Indicator",
+                        height=250,
+                        yaxis_range=[0, 100]
+                    )
+                    st.plotly_chart(fig_rsi, use_container_width=True)
+            
+            # MACD Chart
+            if 'MACD' in df.columns and 'MACD_Signal' in df.columns:
+                df_macd = df.dropna(subset=['MACD', 'MACD_Signal'])
+                if len(df_macd) > 0:
+                    fig_macd = go.Figure()
+                    fig_macd.add_trace(go.Scatter(
+                        x=df_macd.index,
+                        y=df_macd['MACD'],
+                        mode='lines',
+                        name='MACD',
+                        line=dict(color='blue', width=2)
+                    ))
+                    fig_macd.add_trace(go.Scatter(
+                        x=df_macd.index,
+                        y=df_macd['MACD_Signal'],
+                        mode='lines',
+                        name='Signal',
+                        line=dict(color='red', width=2)
+                    ))
+                    fig_macd.update_layout(
+                        title="MACD Indicator",
+                        height=250
+                    )
+                    st.plotly_chart(fig_macd, use_container_width=True)
+        else:
+            st.error(f"Could not fetch data for {selected_stock}")
+            st.info("Try: 1) Different stock 2) Check stock code with breeze.get_names()")
+    else:
+        st.error(f"Stock code not found for {selected_stock}")
 
-# --------------------------
-# TAB 6: LIVE MULTI-CHART (4x4 GRID)
-# --------------------------
-with tab6:
-    st.title("📊 Live Multi-Chart Dashboard")
-    st.markdown("Monitor up to 16 stocks simultaneously with live intraday charts")
-    st.markdown("---")
+# TAB 3: INTRADAY MONITOR
+with tab3:
+    st.header("⚡ Intraday Multi-Stock Monitor")
     
-    # Controls
-    col1, col2, col3 = st.columns([3, 2, 1])
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("**📋 Manage Your Watchlist (16 stocks max)**")
-        
-        # Multi-select for watchlist
-        selected_watchlist = st.multiselect(
-            "Select stocks to monitor",
-            options=sorted(FNO_STOCKS),
-            default=st.session_state.watchlist_stocks[:16],
-            max_selections=16,
-            key="watchlist_selector"
+        watchlist = st.multiselect(
+            "Select Stocks",
+            FNO_STOCKS,
+            default=FNO_STOCKS[:4],
+            max_selections=6,
+            key="intraday_stocks"
         )
-        
-        if selected_watchlist != st.session_state.watchlist_stocks:
-            st.session_state.watchlist_stocks = selected_watchlist
     
     with col2:
-        chart_period_multi = st.selectbox(
-            "📅 Intraday Period",
-            options=["1d", "5d"],
-            index=0,
-            key="multi_chart_period"
-        )
-        
-        chart_interval = st.selectbox(
-            "⏱ Interval",
-            options=["1m", "5m", "15m", "30m", "60m"],
-            index=2,
-            key="multi_chart_interval"
+        intraday_interval = st.selectbox(
+            "Interval",
+            ["1minute", "5minute", "30minute"],
+            format_func=lambda x: {"1minute": "1 Min", "5minute": "5 Min", "30minute": "30 Min"}[x],
+            key="intraday_interval"
         )
     
     with col3:
-        if st.button("🔄 Refresh All", type="primary", use_container_width=True):
+        if st.button("🔄 Refresh", key="intraday_refresh"):
             st.rerun()
-        
-        st.caption(f"**{len(selected_watchlist)}/16** stocks")
     
-    st.markdown("---")
-    
-    if not selected_watchlist:
-        st.info("👆 Select stocks from the dropdown to start monitoring")
-    else:
-        # Calculate grid layout
-        num_stocks = len(selected_watchlist)
+    if watchlist:
+        num_cols = 2 if len(watchlist) <= 4 else 3
+        num_rows = (len(watchlist) + num_cols - 1) // num_cols
         
-        # Create 4x4 grid
-        for row in range(4):
-            cols = st.columns(4)
+        for row in range(num_rows):
+            cols = st.columns(num_cols)
             for col_idx, col in enumerate(cols):
-                stock_idx = row * 4 + col_idx
+                stock_idx = row * num_cols + col_idx
                 
-                if stock_idx < num_stocks:
-                    stock_name = selected_watchlist[stock_idx]
-                    ticker = STOCK_TICKER_MAP.get(stock_name)
+                if stock_idx < len(watchlist):
+                    stock_name = watchlist[stock_idx]
+                    stock_code = STOCK_CODE_MAP.get(stock_name)
                     
                     with col:
-                        try:
-                            stock = yf.Ticker(ticker)
-                            df = stock.history(period=chart_period_multi, interval=chart_interval)
+                        if stock_code:
+                            df = fetch_historical_data(stock_code, 1, intraday_interval)
                             
-                            if not df.empty and len(df) > 0:
-                                # Calculate metrics
-                                current_price = df['Close'].iloc[-1]
-                                prev_price = df['Close'].iloc[0]
-                                price_change = current_price - prev_price
-                                price_change_pct = (price_change / prev_price) * 100
+                            if df is not None and not df.empty and len(df) >= 2:
+                                current = df['Close'].iloc[-1]
+                                prev = df['Close'].iloc[0]
+                                change = current - prev
+                                change_pct = (change / prev) * 100
+                                arrow = "🟢" if change_pct >= 0 else "🔴"
                                 
-                                # Color based on change
-                                if price_change >= 0:
-                                    color = "green"
-                                    arrow = "🟢"
+                                st.markdown(f"### {arrow} {stock_name}")
+                                st.metric("Price", f"₹{current:.2f}", f"{change:.2f} ({change_pct:.2f}%)")
+                                
+                                # Candlestick chart
+                                if all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                                    fig = go.Figure(data=[go.Candlestick(
+                                        x=df.index,
+                                        open=df['Open'],
+                                        high=df['High'],
+                                        low=df['Low'],
+                                        close=df['Close']
+                                    )])
+                                    fig.update_layout(
+                                        height=250,
+                                        margin=dict(l=10, r=10, t=10, b=10),
+                                        showlegend=False,
+                                        xaxis_rangeslider_visible=False
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                                 else:
-                                    color = "red"
-                                    arrow = "🔴"
-                                
-                                # Mini card
-                                st.markdown(f"**{arrow} {stock_name}**")
-                                st.metric(
-                                    label="Price",
-                                    value=f"₹{current_price:.2f}",
-                                    delta=f"{price_change_pct:.2f}%"
-                                )
-                                
-                                # Mini chart
-                                fig_mini = go.Figure()
-                                fig_mini.add_trace(go.Scatter(
-                                    x=df.index,
-                                    y=df['Close'],
-                                    mode='lines',
-                                    line=dict(color=color, width=2),
-                                    fill='tozeroy',
-                                    fillcolor=f'rgba({"0,255,0" if color == "green" else "255,0,0"},0.1)'
-                                ))
-                                
-                                fig_mini.update_layout(
-                                    height=200,
-                                    margin=dict(l=0, r=0, t=0, b=0),
-                                    xaxis=dict(showgrid=False, showticklabels=False),
-                                    yaxis=dict(showgrid=False, showticklabels=True),
-                                    showlegend=False,
-                                    plot_bgcolor='rgba(0,0,0,0)',
-                                    paper_bgcolor='rgba(0,0,0,0)'
-                                )
-                                
-                                st.plotly_chart(fig_mini, use_container_width=True, config={'displayModeBar': False})
-                                
-                                # Quick stats
-                                st.caption(f"H: ₹{df['High'].max():.2f} | L: ₹{df['Low'].min():.2f}")
-                            
+                                    # Line chart fallback
+                                    fig = go.Figure()
+                                    fig.add_trace(go.Scatter(
+                                        x=df.index,
+                                        y=df['Close'],
+                                        mode='lines',
+                                        line=dict(color='green' if change_pct >= 0 else 'red', width=2),
+                                        fill='tozeroy'
+                                    ))
+                                    fig.update_layout(
+                                        height=250,
+                                        margin=dict(l=10, r=10, t=10, b=10),
+                                        showlegend=False
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                             else:
                                 st.warning(f"No data for {stock_name}")
-                        
-                        except Exception as e:
-                            st.error(f"{stock_name}: Error")
-                            st.caption(str(e)[:50])
-        
-        st.markdown("---")
-        st.caption("💡 **Tip:** Charts auto-update when you click 'Refresh All'. Add/remove stocks using the dropdown above.")
-        st.caption("📊 **Live Data:** Intraday charts show real-time price movements during market hours")
-        st.caption("⚠ **Note:** Data updates are subject to Yahoo Finance availability and delays")
+                        else:
+                            st.error(f"Code not found: {stock_name}")
+    else:
+        st.info("👆 Select stocks to monitor")
 
-# --------------------------
-# FOOTER
-# --------------------------
+# Footer
 st.markdown("---")
-st.caption("💡 Dashboard shows news, Q2/Q3 FY26 earnings, technical analysis, and price charts for F&O stocks")
-st.caption("📊 Technical indicators: RSI, MACD, AO | SMA: 20, 50, 200 | EMA: 9, 20, 50")
-st.caption("📅 Indian FY Quarters: Q1 (Apr-Jun), Q2 (Jul-Sep), Q3 (Oct-Dec), Q4 (Jan-Mar)")
-st.caption("📅 FY26 = April 1, 2025 - March 31, 2026")
-st.caption("⚠ **Disclaimer**: This dashboard is for educational purposes only. Not financial advice.")
+st.caption("💡 F&O Dashboard powered by ICICI Breeze API")
+st.caption("⚠ **Disclaimer:** For educational purposes only. Not financial advice.")
